@@ -29,7 +29,34 @@ class HomeWorkoutApp extends StatelessWidget {
           onSurface: ink,
         ),
       ),
-      home: HomeScreen(service: service),
+      home: _WorkoutSession(service: service),
+    );
+  }
+}
+
+class _WorkoutSession extends StatefulWidget {
+  const _WorkoutSession({required this.service});
+
+  final WorkoutService service;
+
+  @override
+  State<_WorkoutSession> createState() => _WorkoutSessionState();
+}
+
+class _WorkoutSessionState extends State<_WorkoutSession> {
+  bool _isAuthenticated = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_isAuthenticated) {
+      return LoginScreen(
+        service: widget.service,
+        onAuthenticated: () => setState(() => _isAuthenticated = true),
+      );
+    }
+    return HomeScreen(
+      service: widget.service,
+      onSignOut: () => setState(() => _isAuthenticated = false),
     );
   }
 }
