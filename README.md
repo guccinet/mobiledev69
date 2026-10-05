@@ -1,200 +1,192 @@
-# แอปออกกำลังกายที่บ้าน
+# Move Daily — แอปออกกำลังกายที่บ้าน
 
-แอป Flutter สำหรับออกกำลังกายโดยไม่ใช้อุปกรณ์ เชื่อมต่อกับ Django REST API
-เพื่อสมัครสมาชิก เข้าสู่ระบบ เลือกแผนฝึก 4 สัปดาห์ และบันทึกประวัติการฝึก
+Move Daily เป็นแอป Flutter สำหรับผู้ที่ต้องการเริ่มหรือรักษาวินัยการออกกำลังกายที่บ้านโดยไม่ใช้อุปกรณ์ เชื่อมต่อ Django REST API และใช้ OpenID Connect (OIDC) สำหรับยืนยันตัวตน
 
-## ฟีเจอร์
+## 1. คำอธิบายโปรเจกต์
 
-- สมัครสมาชิก เข้าสู่ระบบ และออกจากระบบด้วยอีเมลและรหัสผ่าน
-- เลือกพื้นที่ฝึก: หน้าท้อง, หน้าอก, แขน, ขา หรือไหล่และหลัง
-- เลือกระดับ: เริ่มฝึก, ปานกลาง หรือขั้นสูง
-- ดูแผนฝึก 28 วัน พร้อมรายการท่า จำนวนเซต และจำนวนครั้งหรือเวลา
-- ดูภาพเคลื่อนไหวสาธิตท่าฝึก พร้อมมุมกล้องที่เหมาะกับท่า ลูกศรบอกทิศทาง
-  คำแนะนำทีละขั้น และข้อควรระวัง
-- ฝึกทีละท่า โดยกดยืนยันเพื่อไปท่าถัดไปเมื่อทำจำนวนครั้งและเซตครบ
-- ท่าที่กำหนดเป็นเวลา เช่น Plank มีตัวนับถอยหลังและไปต่อได้เมื่อครบเวลา
-- เพิ่มวันพักฟื้นบนปฏิทินหลังบันทึกการฝึกสำเร็จติดต่อกัน 3 วัน โดยไม่คิดเป็นวันฝึก
-- จับเวลา session และหยุด/เริ่มเวลาได้ระหว่างฝึก
-- วันที่ฝึกสำเร็จแล้วเปิดดูท่าซ้ำได้โดยไม่เริ่มตัวจับเวลาหรือนับถอยหลัง
-- เปิดดูสถิติบนหน้าแดชบอร์ด และดูประวัติการฝึกในหน้าแยก
-- จัดการข้อมูลโปรไฟล์ส่วนตัว ได้แก่ เพศ อายุ น้ำหนัก และส่วนสูง โดยบันทึกกับบัญชีผู้ใช้
-- แสดงเงารูปร่างคนสีขาวโดยประมาณบนการ์ดสถิติ ปรับตามส่วนสูงและน้ำหนักในโปรไฟล์
-- ดูกราฟความก้าวหน้ารายสัปดาห์ 8 สัปดาห์ โดยเลือกจำนวนวันฝึก นาที หรือแคลอรี
-- รับคำแนะนำระดับเริ่มต้นจากอายุและประวัติการฝึก โดยเพศและน้ำหนักไม่ถูกใช้ตัดสินระดับโดยตรง
+แอปช่วยจัดแผนออกกำลังกายตามส่วนของร่างกายและระดับความยาก มีแผนฝึก 28 วันพร้อมคำแนะนำและภาพสาธิตท่า บันทึกประวัติและสรุปความก้าวหน้าไว้ในบัญชีของผู้ใช้
 
-คำแนะนำระดับเป็นแนวทางเบื้องต้น: หากอายุต่ำกว่า 18 ปีหรือ 60 ปีขึ้นไป
-หรือข้อมูลอายุยังไม่ครบ จะแนะนำระดับเริ่มฝึกไว้ก่อน สำหรับช่วงอายุ 18–59 ปี
-จะแนะนำระดับปานกลางเมื่อมีประวัติฝึกสำเร็จอย่างน้อย 8 ครั้งใน 28 วันล่าสุด
-ระบบไม่แนะนำระดับขั้นสูงอัตโนมัติ และไม่ใช้เพศหรือน้ำหนักเป็นตัวตัดสิน
-คำแนะนำนี้ไม่ใช่การประเมินทางการแพทย์
+## 2. ฟีเจอร์
 
-วันพักฟื้นจะแสดงในวันถัดไปหลังบันทึกวันฝึกสำเร็จติดต่อกันครบ 3 วัน
-วันพักประจำทุกวันที่ 7 ของแผนยังคงมีอยู่ และวันพักจะไม่ถูกบันทึกเป็นการฝึก
-หากมีวันที่ไม่ได้ฝึก การนับวันฝึกติดต่อกันจะเริ่มใหม่
+### ฟีเจอร์หลัก
 
-> จำนวนแคลอรีเป็นค่าประมาณจากเวลาที่บันทึก โดยคิด 5 kcal ต่อนาที
-> ไม่ใช่การวัดพลังงานที่เผาผลาญจริง
+- เข้าสู่ระบบและออกจากระบบด้วย OIDC Authorization Code Flow + PKCE
+- สมัครบัญชีใหม่ด้วยอีเมลและรหัสผ่านที่ตรวจสอบความปลอดภัยฝั่ง Django
+- ป้องกันหน้าข้อมูลด้วยสถานะการเข้าสู่ระบบ และกู้คืนเซสชันเมื่อเปิดแอปอีกครั้ง
+- เลือกพื้นที่ฝึก: หน้าท้อง หน้าอก แขน ขา หรือไหล่และหลัง
+- เลือกระดับเริ่มฝึก ปานกลาง หรือขั้นสูง พร้อมดูแผนฝึก 28 วัน
+- ดูท่าฝึกทีละท่า พร้อมภาพสาธิต คำแนะนำ และตัวนับเวลาสำหรับท่าค้าง
+- บันทึกประวัติ ดูรายละเอียด แก้ไขเวลา และลบรายการฝึกของบัญชีตนเอง
+- จัดการข้อมูลโปรไฟล์ ได้แก่ เพศ อายุ น้ำหนัก และส่วนสูง
+- แสดงสถิติวันฝึก เวลา และแคลอรีโดยประมาณ
+- แสดงข้อผิดพลาดจาก API เมื่อเชื่อมต่อไม่ได้หรือคำขอไม่สำเร็จ
 
-## เครื่องมือที่ต้องใช้
+### ฟีเจอร์เสริม
 
-- Python 3.9–3.12
-- Flutter และ Dart ตามเวอร์ชันที่กำหนดใน `pubspec.yaml`
+- กราฟความก้าวหน้ารายสัปดาห์ 8 สัปดาห์
+- คำแนะนำระดับเริ่มต้นจากอายุและประวัติการฝึก
+- วันพักฟื้นหลังฝึกสำเร็จติดต่อกัน 3 วัน และวันพักตามแผน
+- ภาพเงารูปร่างโดยประมาณจากส่วนสูงและน้ำหนักในโปรไฟล์
 
-## เริ่มใช้งาน
+คำแนะนำระดับเป็นข้อมูลประกอบ ไม่ใช่การประเมินทางการแพทย์ แคลอรีเป็นค่าประมาณ ไม่ใช่การวัดพลังงานที่เผาผลาญจริง
 
-### 1. ติดตั้งและเริ่ม Django API
+## 3. Tech Stack และสถาปัตยกรรม
 
-จากโฟลเดอร์หลักของโปรเจ็กต์ สร้าง virtual environment และติดตั้ง dependencies:
+- **Frontend:** Flutter และ Dart
+- **Backend:** Django, Django REST Framework และ SQLite สำหรับการพัฒนา
+- **Authentication:** `django-oidc-provider` และ OIDC Authorization Code Flow + PKCE (S256)
+- **Token storage:** `flutter_secure_storage` ผ่าน `oidc_default_store`
+- **Dependency injection:** `provider` และ `MultiProvider`
+- **โครงสร้างแอป:** View → ViewModel → Repository → Service
+- **Error handling:** Result Pattern ใน Data Layer และแจ้งข้อผิดพลาดใน UI
+- **Backend environment/dependencies:** `uv`
+
+## 4. Prerequisites
+
+ติดตั้งเครื่องมือเหล่านี้ก่อนเริ่ม:
+
+- [Git](https://git-scm.com/downloads)
+- [Flutter SDK](https://docs.flutter.dev/get-started/install) พร้อม Chrome สำหรับรัน Flutter Web
+- [uv](https://docs.astral.sh/uv/getting-started/installation/)
+- [Python 3.9 ขึ้นไป](https://www.python.org/downloads/) (หรือให้ `uv` จัดการ Python ให้)
+
+ตรวจสอบการติดตั้ง:
 
 ```powershell
-py -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
+git --version
+flutter --version
+uv --version
 ```
 
-สร้างตารางฐานข้อมูลและเริ่มเซิร์ฟเวอร์:
+## 5. How to Run
+
+คู่มือนี้เป็นขั้นตอนสำหรับ Windows และ PowerShell โดยต้องเปิด Backend กับ Flutter ค้างไว้พร้อมกันใน **Terminal แยกกัน 2 หน้าต่าง** ค่า `localhost`, พอร์ต `3000` และพอร์ต `50000` ต้องตรงกันตลอดการเข้าสู่ระบบ OIDC
+
+### ขั้นที่ 1 — เตรียมเครื่องมือและเปิดโฟลเดอร์โปรเจกต์
+
+ติดตั้ง Git, Flutter SDK, Chrome และ `uv` ตามลิงก์ในหัวข้อ Prerequisites จากนั้นเปิดโฟลเดอร์ที่ clone โปรเจกต์ไว้ด้วย VS Code (ตัวอย่างตำแหน่ง `C:\MoblieDev69\home_workout_app`; หากเก็บไว้ที่อื่น ให้ใช้ตำแหน่งของคุณแทน)
+
+ใน VS Code เลือก **Terminal > New Terminal** แล้วตรวจสอบว่าตำแหน่งปัจจุบันเป็นโฟลเดอร์รากของโปรเจกต์:
 
 ```powershell
-.\.venv\Scripts\python.exe backend\manage.py migrate
-.\.venv\Scripts\python.exe backend\manage.py runserver 0.0.0.0:3000
+Get-Location
 ```
 
-API สำหรับการพัฒนาในเครื่องจะอยู่ที่ `http://localhost:3000/api`
-และข้อมูลจะเก็บใน SQLite ที่ `backend/db.sqlite3`
+ผลลัพธ์ควรลงท้ายด้วย `home_workout_app` หากไม่ใช่ ให้ย้ายไปยังโฟลเดอร์โปรเจกต์ (แก้ path ให้ตรงกับตำแหน่งที่เก็บโปรเจกต์):
 
-### 2. เริ่มแอป Flutter
+```powershell
+Set-Location C:\path\to\home_workout_app
+```
 
-เปิด terminal อีกหน้าต่างที่โฟลเดอร์หลักของโปรเจ็กต์:
+ตรวจสอบเครื่องมือ:
+
+```powershell
+git --version
+flutter --version
+uv --version
+```
+
+### ขั้นที่ 2 — เปิด Django Backend (Terminal 1)
+
+เปิด Terminal แรก แล้วรันคำสั่งต่อไปนี้ทีละบรรทัดจากโฟลเดอร์รากของโปรเจกต์:
+
+```powershell
+uv sync --project backend --locked
+$env:DJANGO_SECRET_KEY = "local-development-only-change-this"
+$env:OIDC_ISSUER_URL = "http://localhost:3000"
+$env:OIDC_REDIRECT_URI = "http://localhost:50000/redirect.html"
+$env:DEMO_USER_PASSWORD = "MoveDailyDemo!2026"
+uv run --project backend python backend\manage.py migrate
+uv run --project backend python backend\manage.py setup_demo
+uv run --project backend python backend\manage.py runserver 0.0.0.0:3000
+```
+
+รอจนเห็นข้อความว่ากำลังรันที่พอร์ต `3000` แล้ว **อย่าปิด Terminal นี้** คำสั่ง migrate และ setup_demo จำเป็นสำหรับการเตรียมเครื่องครั้งแรก; เมื่อฐานข้อมูลตั้งค่าแล้ว ในการเปิดครั้งถัดไปให้กำหนดตัวแปร `$env:DJANGO_SECRET_KEY`, `$env:OIDC_ISSUER_URL`, `$env:OIDC_REDIRECT_URI` และ `$env:DEMO_USER_PASSWORD` ใหม่ใน Terminal แล้วรันเฉพาะคำสั่ง `runserver`
+
+`setup_demo` เตรียมบัญชีสาธิตและ OIDC client สำหรับ PKCE คำสั่งสามารถเรียกซ้ำได้ และจะตั้งรหัสผ่านของบัญชีสาธิตตามค่า `DEMO_USER_PASSWORD` ที่กำหนด
+
+### ขั้นที่ 3 — เปิด Flutter Web (Terminal 2)
+
+เปิด Terminal ใหม่อีกหน้าต่าง (อย่าหยุด Terminal 1) และตรวจให้แน่ใจว่าอยู่ที่โฟลเดอร์รากของโปรเจกต์ จากนั้นรัน:
 
 ```powershell
 flutter pub get
-flutter run -d chrome
+flutter run -d chrome --web-port 50000 --dart-define=OIDC_ISSUER_URL=http://localhost:3000/oidc --dart-define=OIDC_DISCOVERY_URL=http://localhost:3000/oidc/.well-known/openid-configuration --dart-define=OIDC_REDIRECT_URI=http://localhost:50000/redirect.html --dart-define=OIDC_CLIENT_ID=movedaily-flutter
 ```
 
-แอปใช้ API URL เริ่มต้นดังนี้:
+รอจน Flutter เปิด Chrome และตรวจแถบที่อยู่ว่าเป็น `http://localhost:50000` ห้ามใช้พอร์ตสุ่มอื่น เช่น `63129` และห้ามสลับ `localhost` เป็น `127.0.0.1` เพราะ redirect URI ที่ลงทะเบียนกับ OIDC client ต้องเป็น `http://localhost:50000/redirect.html`
 
-- Flutter Web: `http://localhost:3000/api`
-- Android Emulator: `http://10.0.2.2:3000/api`
+### ขั้นที่ 4 — สมัครบัญชีหรือเข้าสู่ระบบ
 
-หากรันบนโทรศัพท์จริง ให้ใช้ IP ของคอมพิวเตอร์ที่อยู่ในเครือข่ายเดียวกัน
-และส่ง URL ให้ Flutter:
+1. ที่หน้า Move Daily กด **เข้าสู่ระบบผ่าน OIDC**
+2. สำหรับบัญชีใหม่ ให้กด **สร้างบัญชีใหม่** ที่หน้า Sign in ของ Move Daily กรอกอีเมล รหัสผ่าน และยืนยันรหัสผ่าน พร้อมกรอกข้อมูลส่วนตัว (เพศ อายุ น้ำหนัก ส่วนสูง) หากต้องการ แล้วกดสร้างบัญชี ระบบจะกลับไปทำขั้นตอน OIDC ต่อ
+3. หากใช้บัญชีสาธิต ให้กรอก `demo@example.com` และ `MoveDailyDemo!2026`
+4. หากปรากฏหน้า **Request for Permission** ให้กด **Authorize** เพื่ออนุญาตการเข้าถึงข้อมูลโปรไฟล์และอีเมล
+5. เมื่อกลับมาที่ `http://localhost:50000` สำเร็จ หน้าแอปจะแสดง Dashboard
+
+### การหยุดและเปิดแอปครั้งถัดไป
+
+- หยุดแต่ละเซิร์ฟเวอร์โดยคลิก Terminal ที่เกี่ยวข้องแล้วกด **Ctrl+C**
+- เปิดใช้งานครั้งถัดไป ให้เริ่ม Backend ใน Terminal 1 และ Flutter ใน Terminal 2 ตามขั้นตอนข้างต้น โดยไม่จำเป็นต้องสั่ง migrate หรือ setup_demo ซ้ำ หากไม่ได้ลบฐานข้อมูล
+- ตัวแปร `$env:...` อยู่เฉพาะ Terminal ปัจจุบัน เมื่อเปิด Terminal ใหม่ต้องกำหนดตัวแปรของ Backend อีกครั้ง
+- หากหน้า Login ยังไม่มีปุ่ม **สมัครสมาชิก** หลังแก้ไขโค้ด ให้หยุด Django server ที่เปิดอยู่ทุก Terminal ด้วย **Ctrl+C** ก่อน เพราะอาจมีหลาย instance ใช้พอร์ต `3000` อยู่ จากนั้นตรวจให้ไม่มีตัวฟังพอร์ตเหลือ แล้วเปิด Backend เพียงครั้งเดียว:
 
 ```powershell
-$env:DJANGO_ALLOWED_HOSTS = "localhost,127.0.0.1,10.0.2.2,YOUR_COMPUTER_IP"
-.\.venv\Scripts\python.exe backend\manage.py runserver 0.0.0.0:3000
+Get-NetTCPConnection -LocalPort 3000 -State Listen |
+  Select-Object LocalAddress, LocalPort, OwningProcess
 ```
 
-เปิดแอป Flutter โดยกำหนด URL เดียวกัน:
+ถ้าคำสั่งยังแสดง process ให้กลับไปยัง Terminal ที่รัน Django process นั้นและกด **Ctrl+C** ก่อนตรวจซ้ำ เมื่อไม่มีผลลัพธ์แล้ว ให้เริ่ม Backend ตามขั้นที่ 2 เพียงหน้าต่างเดียว จากนั้นเปิด `http://localhost:3000/accounts/register/` เพื่อตรวจหน้าสมัคร หรือกลับไปลองเข้าสู่ระบบผ่าน OIDC อีกครั้ง
+- หากแจ้งว่าพอร์ต `50000` ถูกใช้งาน ให้ตรวจและหยุด Flutter instance เดิมก่อน อย่าเปิด Flutter ซ้ำหลายครั้ง:
 
 ```powershell
-flutter run --dart-define=API_BASE_URL=http://YOUR_COMPUTER_IP:3000/api
+Get-NetTCPConnection -LocalPort 50000 -State Listen |
+  Select-Object LocalAddress, LocalPort, OwningProcess
 ```
 
-เปลี่ยน `YOUR_COMPUTER_IP` เป็น IP จริงของคอมพิวเตอร์ เช่น `192.168.1.20`
-และตรวจสอบว่า firewall อนุญาตการเชื่อมต่อพอร์ต `3000`
+หากเห็นหน้าโหลดค้างหลัง Authorize ให้ตรวจว่า Flutter ยังทำงานอยู่และ URL ใน Chrome เป็น `localhost:50000` ส่วน Backend ต้องยังทำงานที่พอร์ต `3000`
 
-## API
+### Android Emulator
 
-ทุก endpoint ที่ระบุด้านล่างอยู่ใต้ `/api` เช่น
-`GET http://localhost:3000/api/plan?focus=abs&difficulty=beginner`
+ค่า API เริ่มต้นของ Android Emulator คือ `http://10.0.2.2:3000/api` ส่วนค่า OIDC issuer/discovery ต้องเข้าถึง backend ได้จาก emulator ด้วย หากใช้ IP อื่น ให้กำหนด `OIDC_ISSUER_URL`, `OIDC_DISCOVERY_URL` และ `OIDC_REDIRECT_URI` ให้สอดคล้องกันทั้ง Flutter และ Django OIDC client ก่อนรัน
 
-| Method | Endpoint | การทำงาน |
-| --- | --- | --- |
-| `GET` | `/health` | ตรวจสอบสถานะ API |
-| `POST` | `/auth/register` | สมัครสมาชิกและรับ token |
-| `POST` | `/auth/login` | เข้าสู่ระบบและรับ token |
-| `POST` | `/auth/logout` | เพิกถอน token ปัจจุบัน |
-| `GET` | `/profile` | ดูข้อมูลโปรไฟล์ของผู้ใช้ |
-| `PATCH` | `/profile` | แก้ไขเพศ อายุ น้ำหนัก และส่วนสูง |
-| `GET` | `/plan` | ดูแผนฝึก 28 วัน |
-| `GET` | `/exercises` | ดูรายการท่าฝึก |
-| `GET` | `/workouts` | ดูประวัติการฝึกของผู้ใช้ |
-| `POST` | `/workouts` | บันทึกวันที่ฝึกเสร็จ |
-| `GET` | `/stats` | ดูสถิติการฝึกสะสม |
+## 6. Demo Account
 
-การสมัครสมาชิกและเข้าสู่ระบบใช้ JSON รูปแบบนี้:
+บัญชีสำหรับสาธิตที่สร้างด้วยคำสั่งในหัวข้อ How to Run:
 
-```json
-{
-  "email": "you@example.com",
-  "password": "your-password"
-}
-```
+- **Username:** `demo@example.com`
+- **Password:** `MoveDailyDemo!2026`
 
-การดูแผนและรายการท่าระบุพื้นที่ฝึกและระดับได้ด้วย query parameters:
+รหัสผ่านนี้ใช้เฉพาะฐานข้อมูลในเครื่องสำหรับการสาธิต คำสั่ง `setup_demo` รับรหัสผ่านจากตัวแปร `DEMO_USER_PASSWORD` หรือถามแบบ interactive และไม่ฝังรหัสผ่านไว้ในแอป
 
-```text
-/plan?focus=abs&difficulty=beginner
-/exercises?focus=chest&difficulty=intermediate
-```
+## 7. Screenshots
 
-ค่าพื้นที่ฝึกที่รองรับ: `abs`, `chest`, `arms`, `legs`, `shoulder_back`
+### หน้า Dashboard
 
-ค่าระดับที่รองรับ: `beginner`, `intermediate`, `advanced`
+![หน้า Dashboard ของ Move Daily](test/screenshots/home-dashboard.png)
 
-หน้าโปรไฟล์รองรับข้อมูลเพศ อายุ น้ำหนัก (กก.) และส่วนสูง (ซม.)
-ส่ง token ใน header `Authorization: Token <token>` เพื่ออ่านหรือแก้ไขข้อมูล:
+### หน้าเข้าสู่ระบบ OIDC
 
-```http
-GET /api/profile
-PATCH /api/profile
-Content-Type: application/json
-```
+![หน้าเข้าสู่ระบบ OIDC ของ Move Daily](test/screenshots/oidc-login.png)
 
-ตัวอย่างข้อมูลสำหรับ `PATCH`:
+## 8. Demo Video
 
-```json
-{
-  "gender": "female",
-  "age": 28,
-  "weightKg": 62.5,
-  "heightCm": 168.0
-}
-```
+**สถานะ: รออัปโหลดวิดีโอสาธิตแบบ Unlisted ไปยัง YouTube**
 
-ค่า `gender` ที่รองรับ: `male`, `female`, `other`, `prefer_not_to_say`
-แต่ละช่องสามารถเว้นว่างหรือส่ง `null` ได้
-
-การบันทึกการฝึกต้องส่ง token ใน header
-`Authorization: Token <token>` และส่งข้อมูล JSON:
-
-```json
-{
-  "focus": "abs",
-  "difficulty": "beginner",
-  "dayNumber": 1,
-  "durationMinutes": 12
-}
-```
-
-แต่ละวันฝึกในแผนบันทึกได้ครั้งเดียว และ API จะปฏิเสธวันที่ยังมาไม่ถึง
-หรือวันที่กำหนดเป็นวันพักฟื้น
-ประวัติและสถิติจะมองเห็นได้เฉพาะผู้ใช้ที่เข้าสู่ระบบบัญชีนั้น
+ยังไม่มีลิงก์วิดีโอจริง จึงยังไม่ใส่ URL จำลองไว้ที่นี่ หลังอัปโหลดแล้ว ให้นำลิงก์ YouTube แบบ Unlisted มาแทนข้อความนี้
 
 ## การทดสอบ
 
-รันทดสอบ Django API:
+รันจากโฟลเดอร์รากของ repository:
 
 ```powershell
-.\.venv\Scripts\python.exe backend\manage.py test workouts
-```
-
-ตรวจการตั้งค่าและ migration:
-
-```powershell
-.\.venv\Scripts\python.exe backend\manage.py check
-.\.venv\Scripts\python.exe backend\manage.py makemigrations --check --dry-run
-```
-
-รันทดสอบ Flutter และตรวจวิเคราะห์โค้ด:
-
-```powershell
+uv run --project backend python backend\manage.py test workouts
+uv run --project backend python backend\manage.py check
+uv run --project backend python backend\manage.py makemigrations --check --dry-run
 flutter test
 flutter analyze
 ```
 
-## การตั้งค่าก่อนใช้งานจริง
+## หมายเหตุความปลอดภัย
 
-การตั้งค่าเริ่มต้นของ Django มีไว้สำหรับการพัฒนาในเครื่องเท่านั้น
-ก่อนนำขึ้นใช้งานจริง ให้กำหนด `DJANGO_DEBUG=0`, ตั้งค่า
-`DJANGO_SECRET_KEY` ที่เป็นความลับ, จำกัด `DJANGO_ALLOWED_HOSTS`,
-จำกัด CORS ให้เฉพาะ origin ที่อนุญาต และใช้ HTTPS
+ค่าคีย์และการตั้งค่าเริ่มต้นมีไว้สำหรับการพัฒนาในเครื่องเท่านั้น ก่อนใช้งานจริงต้องตั้ง `DJANGO_DEBUG=0`, ใช้ `DJANGO_SECRET_KEY` ที่เก็บเป็นความลับ, จำกัด `DJANGO_ALLOWED_HOSTS` และ CORS, ใช้ HTTPS และตั้งค่า OIDC redirect URI ให้เป็น HTTPS ที่ตรงกับ client

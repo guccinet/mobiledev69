@@ -1,10 +1,14 @@
 from datetime import timedelta
-
-from django.contrib.auth import get_user_model
 from django.db.models import Sum
+from django.contrib import messages
+from django.contrib.auth import login
+from django.db import IntegrityError, transaction
+from django.shortcuts import get_object_or_404
+from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from rest_framework import status
-from rest_framework.authtoken.models import Token
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -16,16 +20,47 @@ from .catalog import (
     get_or_create_challenge,
     make_plan,
 )
+from .forms import RegistrationForm
 from .models import UserProfile, Workout
 from .serializers import (
     CompleteWorkoutSerializer,
-    LoginSerializer,
-    RegistrationSerializer,
     UserProfileSerializer,
+    WorkoutUpdateSerializer,
 )
 
 
-User = get_user_model()
+def register(request):
+    next_url = request.POST.get("next") or request.GET.get("next", "")
+    form = RegistrationForm(
+        request.POST if request.method == "POST" else None
+    )
+
+    if request.method == "POST" and form.is_valid():
+        try:
+            with transaction.atomic():
+                user = form.save()
+        except IntegrityError:
+            form.add_error("email", "อีเมลนี้ถูกใช้สมัครบัญชีแล้ว")
+        else:
+            login(
+                request,
+                user,
+                backend="django.contrib.auth.backends.ModelBackend",
+            )
+            messages.success(request, "สร้างบัญชีสำเร็จ กำลังเข้าสู่ระบบ")
+            if url_has_allowed_host_and_scheme(
+                next_url,
+                allowed_hosts={request.get_host()},
+                require_https=request.is_secure(),
+            ):
+                return redirect(next_url)
+            return redirect(reverse("login"))
+
+    return render(
+        request,
+        "registration/register.html",
+        {"form": form, "next": next_url},
+    )
 
 
 def workout_json(workout):
@@ -48,42 +83,6 @@ class HealthView(APIView):
 
     def get(self, _request):
         return Response({"status": "ok"})
-
-
-class RegisterView(APIView):
-    permission_classes = [AllowAny]
-    authentication_classes = []
-
-    def post(self, request):
-        serializer = RegistrationSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = serializer.save()
-        token, _ = Token.objects.get_or_create(user=user)
-        return Response(
-            {"token": token.key, "email": user.email},
-            status=status.HTTP_201_CREATED,
-        )
-
-
-class LoginView(APIView):
-    permission_classes = [AllowAny]
-    authentication_classes = []
-
-    def post(self, request):
-        serializer = LoginSerializer(
-            data=request.data,
-            context={"request": request},
-        )
-        serializer.is_valid(raise_exception=True)
-        user = serializer.validated_data["user"]
-        token, _ = Token.objects.get_or_create(user=user)
-        return Response({"token": token.key, "email": user.email})
-
-
-class LogoutView(APIView):
-    def post(self, request):
-        request.auth.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class ProfileView(APIView):
@@ -175,6 +174,39 @@ class WorkoutListView(APIView):
             calories_burned=max(1, round(duration_minutes * 5)),
         )
         return Response(workout_json(workout), status=status.HTTP_201_CREATED)
+
+
+class WorkoutDetailView(APIView):
+    def get_workout(self, request, workout_id):
+        return get_object_or_404(
+            Workout.objects.select_related("challenge"),
+            pk=workout_id,
+            challenge__user=request.user,
+        )
+
+    def get(self, request, workout_id):
+        return Response(workout_json(self.get_workout(request, workout_id)))
+
+    def put(self, request, workout_id):
+        return self.update(request, workout_id, partial=False)
+
+    def patch(self, request, workout_id):
+        return self.update(request, workout_id, partial=True)
+
+    def update(self, request, workout_id, partial):
+        workout = self.get_workout(request, workout_id)
+        serializer = WorkoutUpdateSerializer(
+            workout,
+            data=request.data,
+            partial=partial,
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(workout_json(workout))
+
+    def delete(self, request, workout_id):
+        self.get_workout(request, workout_id).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class StatsView(APIView):

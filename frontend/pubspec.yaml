@@ -9,4 +9,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_secure_storage: ^10.3.4
   http: ^1.6.0
+  oidc: ^4.0.0
+  oidc_default_store: ^1.1.2
+  provider: ^6.1.5+1

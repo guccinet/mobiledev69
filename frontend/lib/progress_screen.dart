@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import 'workout_api.dart';
+import 'workout_view_model.dart';
 
 const _progressInk = Color(0xFF192A23);
 const _progressMuted = Color(0xFF66736C);
@@ -84,7 +85,7 @@ WorkoutLevelRecommendation recommendWorkoutDifficulty(
 class WorkoutProgressScreen extends StatefulWidget {
   const WorkoutProgressScreen({super.key, required this.service});
 
-  final WorkoutService service;
+  final WorkoutViewModel service;
 
   @override
   State<WorkoutProgressScreen> createState() => _WorkoutProgressScreenState();

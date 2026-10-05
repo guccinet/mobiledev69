@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>สร้างบัญชี Move Daily</title>
+    <style>
+      body { background: #f4f2ea; color: #192a23; font: 16px system-ui, sans-serif; margin: 0; }
+      main { background: white; border-radius: 16px; margin: 10vh auto; max-width: 380px; padding: 28px; }
+      label { display: block; font-weight: 600; margin-top: 16px; }
+      input { box-sizing: border-box; font: inherit; margin-top: 6px; padding: 11px; width: 100%; }
+      select { box-sizing: border-box; font: inherit; margin-top: 6px; padding: 11px; width: 100%; }
+      button, .login-link { border-radius: 8px; cursor: pointer; display: block; font: inherit; margin-top: 16px; padding: 12px; text-align: center; width: 100%; }
+      button { background: #192a23; border: 0; color: white; margin-top: 22px; }
+      .login-link { background: white; border: 1px solid #192a23; box-sizing: border-box; color: #192a23; text-decoration: none; }
+      .error { color: #a32626; }
+      .hint { color: #66736c; font-size: 14px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>สร้างบัญชี Move Daily</h1>
+      <p>ใช้อีเมลและรหัสผ่านนี้เพื่อเข้าสู่ระบบผ่าน OIDC</p>
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ next }}">
+        <label for="{{ form.email.id_for_label }}">{{ form.email.label }}</label>
+        {{ form.email }}
+        {% for error in form.email.errors %}
+          <p class="error" role="alert">{{ error }}</p>
+        {% endfor %}
+
+        <p class="hint">ข้อมูลต่อไปนี้กรอกหรือเว้นว่างก็ได้ และแก้ไขภายหลังได้ในหน้าโปรไฟล์</p>
+        <label for="{{ form.gender.id_for_label }}">{{ form.gender.label }}</label>
+        {{ form.gender }}
+        {% for error in form.gender.errors %}
+          <p class="error" role="alert">{{ error }}</p>
+        {% endfor %}
+
+        <label for="{{ form.age.id_for_label }}">{{ form.age.label }}</label>
+        {{ form.age }}
+        {% for error in form.age.errors %}
+          <p class="error" role="alert">{{ error }}</p>
+        {% endfor %}
+
+        <label for="{{ form.weight_kg.id_for_label }}">{{ form.weight_kg.label }}</label>
+        {{ form.weight_kg }}
+        {% for error in form.weight_kg.errors %}
+          <p class="error" role="alert">{{ error }}</p>
+        {% endfor %}
+
+        <label for="{{ form.height_cm.id_for_label }}">{{ form.height_cm.label }}</label>
+        {{ form.height_cm }}
+        {% for error in form.height_cm.errors %}
+          <p class="error" role="alert">{{ error }}</p>
+        {% endfor %}
+
+        <label for="{{ form.password1.id_for_label }}">{{ form.password1.label }}</label>
+        {{ form.password1 }}
+        {% for error in form.password1.errors %}
+          <p class="error" role="alert">{{ error }}</p>
+        {% endfor %}
+
+        <label for="{{ form.password2.id_for_label }}">{{ form.password2.label }}</label>
+        {{ form.password2 }}
+        {% for error in form.password2.errors %}
+          <p class="error" role="alert">{{ error }}</p>
+        {% endfor %}
+
+        <button type="submit">สร้างบัญชี</button>
+      </form>
+      <a class="login-link" href="{% url 'login' %}?next={{ next|urlencode }}">กลับไปหน้าเข้าสู่ระบบ</a>
+    </main>
+  </body>
+</html>

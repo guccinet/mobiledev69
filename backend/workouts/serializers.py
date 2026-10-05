@@ -1,50 +1,6 @@
-from django.contrib.auth import authenticate, get_user_model
 from rest_framework import serializers
 
 from .models import UserProfile
-
-
-User = get_user_model()
-
-
-class CredentialsSerializer(serializers.Serializer):
-    email = serializers.EmailField(max_length=150)
-    password = serializers.CharField(
-        write_only=True,
-        trim_whitespace=False,
-        min_length=8,
-    )
-
-
-class RegistrationSerializer(CredentialsSerializer):
-    def validate_email(self, value):
-        normalized = value.strip().lower()
-        if User.objects.filter(username=normalized).exists():
-            raise serializers.ValidationError("อีเมลนี้ถูกใช้งานแล้ว")
-        return normalized
-
-    def create(self, validated_data):
-        return User.objects.create_user(
-            username=validated_data["email"],
-            email=validated_data["email"],
-            password=validated_data["password"],
-        )
-
-
-class LoginSerializer(CredentialsSerializer):
-    def validate(self, attrs):
-        email = attrs["email"].strip().lower()
-        user = authenticate(
-            request=self.context.get("request"),
-            username=email,
-            password=attrs["password"],
-        )
-        if user is None:
-            raise serializers.ValidationError(
-                {"detail": "อีเมลหรือรหัสผ่านไม่ถูกต้อง"}
-            )
-        attrs["user"] = user
-        return attrs
 
 
 class CompleteWorkoutSerializer(serializers.Serializer):
@@ -91,3 +47,16 @@ class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserProfile
         fields = ["email", "gender", "age", "weightKg", "heightCm"]
+
+
+class WorkoutUpdateSerializer(serializers.Serializer):
+    title = serializers.CharField(max_length=100, trim_whitespace=True)
+    durationMinutes = serializers.IntegerField(min_value=1, max_value=300)
+
+    def update(self, instance, validated_data):
+        instance.title = validated_data.get("title", instance.title)
+        duration = validated_data.get("durationMinutes", instance.duration_minutes)
+        instance.duration_minutes = duration
+        instance.calories_burned = max(1, round(duration * 5))
+        instance.save(update_fields=["title", "duration_minutes", "calories_burned"])
+        return instance

@@ -18,7 +18,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "corsheaders",
     "rest_framework",
-    "rest_framework.authtoken",
+    "oidc_provider",
     "workouts",
 ]
 
@@ -30,6 +30,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    "workouts.middleware.RequirePublicClientPKCE",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
@@ -37,7 +38,7 @@ ROOT_URLCONF = "config.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [BASE_DIR / "workouts" / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -50,6 +51,19 @@ TEMPLATES = [
     },
 ]
 WSGI_APPLICATION = "config.wsgi.application"
+LOGIN_URL = "/accounts/login/"
+LOGIN_REDIRECT_URL = "/"
+SITE_URL = os.environ.get("OIDC_ISSUER_URL", "http://localhost:3000").rstrip("/")
+OIDC_SITE_URL = SITE_URL
+OIDC_IDTOKEN_INCLUDE_CLAIMS = True
+OIDC_FLUTTER_CLIENT_ID = os.environ.get(
+    "OIDC_FLUTTER_CLIENT_ID",
+    "movedaily-flutter",
+)
+OIDC_REDIRECT_URI = os.environ.get(
+    "OIDC_REDIRECT_URI",
+    "http://localhost:50000/redirect.html",
+)
 
 DATABASES = {
     "default": {
@@ -70,13 +84,13 @@ TIME_ZONE = "Asia/Bangkok"
 USE_I18N = True
 USE_TZ = True
 STATIC_URL = "static/"
-DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
 
 CORS_ALLOW_ALL_ORIGINS = DEBUG
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework.authentication.TokenAuthentication",
+        "workouts.authentication.OIDCAccessTokenAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",

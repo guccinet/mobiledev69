@@ -1,82 +1,30 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import 'exercise_guide.dart';
 import 'exercise_illustration.dart';
 import 'progress_screen.dart';
 import 'workout_api.dart';
+import 'workout_view_model.dart';
 
 const _ink = Color(0xFF192A23);
 const _muted = Color(0xFF66736C);
 const _lime = Color(0xFFB7D36B);
 const _orange = Color(0xFFE66A3D);
 
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends StatelessWidget {
   const LoginScreen({
     super.key,
-    required this.service,
-    required this.onAuthenticated,
+    required this.onSignIn,
+    required this.isLoading,
+    this.error,
   });
 
-  final WorkoutService service;
-  final VoidCallback onAuthenticated;
-
-  @override
-  State<LoginScreen> createState() => _LoginScreenState();
-}
-
-class _LoginScreenState extends State<LoginScreen> {
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  bool _isRegistering = false;
-  bool _isLoading = false;
-  String? _error;
-
-  @override
-  void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    final email = _emailController.text.trim();
-    final password = _passwordController.text;
-    if (email.isEmpty || password.isEmpty) {
-      setState(() => _error = 'กรอกอีเมลและรหัสผ่านให้ครบ');
-      return;
-    }
-    if (_isRegistering && password.length < 8) {
-      setState(() => _error = 'รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร');
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-    try {
-      if (_isRegistering) {
-        await widget.service.register(email: email, password: password);
-      } else {
-        await widget.service.login(email: email, password: password);
-      }
-      if (mounted) {
-        widget.onAuthenticated();
-      }
-    } catch (error) {
-      if (mounted) {
-        setState(
-          () => _error = error.toString().replaceFirst('Exception: ', ''),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
+  final Future<void> Function() onSignIn;
+  final bool isLoading;
+  final Object? error;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -111,68 +59,38 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                Text(
-                  _isRegistering ? 'เริ่มต้นวันนี้' : 'ยินดีต้อนรับกลับ',
+                const Text(
+                  'ยินดีต้อนรับกลับ',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: _ink,
                     fontSize: 30,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  _isRegistering
-                      ? 'สร้างบัญชีเพื่อบันทึกแผนและความก้าวหน้าของคุณ'
-                      : 'เข้าสู่ระบบเพื่อไปต่อกับเป้าหมายของคุณ',
+                const Text(
+                  'เข้าสู่ระบบด้วยบัญชีผู้ให้บริการเพื่อไปต่อกับเป้าหมายของคุณ',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: _muted),
+                  style: TextStyle(color: _muted),
                 ),
                 const SizedBox(height: 30),
-                TextField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  textInputAction: TextInputAction.next,
-                  autofillHints: const [AutofillHints.email],
-                  decoration: const InputDecoration(
-                    labelText: 'อีเมล',
-                    prefixIcon: Icon(Icons.mail_outline),
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                TextField(
-                  controller: _passwordController,
-                  obscureText: true,
-                  textInputAction: TextInputAction.done,
-                  autofillHints: [
-                    _isRegistering
-                        ? AutofillHints.newPassword
-                        : AutofillHints.password,
-                  ],
-                  onSubmitted: (_) => _isLoading ? null : _submit(),
-                  decoration: const InputDecoration(
-                    labelText: 'รหัสผ่าน',
-                    prefixIcon: Icon(Icons.lock_outline),
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                if (_error != null) ...[
+                if (error != null) ...[
                   const SizedBox(height: 12),
                   Text(
-                    _error!,
+                    error.toString().replaceFirst('Exception: ', ''),
                     textAlign: TextAlign.center,
                     style: const TextStyle(color: Colors.red),
                   ),
                 ],
                 const SizedBox(height: 20),
                 FilledButton(
-                  onPressed: _isLoading ? null : _submit,
+                  onPressed: isLoading ? null : onSignIn,
                   style: FilledButton.styleFrom(
                     backgroundColor: _ink,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
-                  child: _isLoading
+                  child: isLoading
                       ? const SizedBox(
                           width: 20,
                           height: 20,
@@ -181,24 +99,10 @@ class _LoginScreenState extends State<LoginScreen> {
                             color: Colors.white,
                           ),
                         )
-                      : Text(
-                          _isRegistering ? 'สร้างบัญชี' : 'เข้าสู่ระบบ',
-                          style: const TextStyle(fontWeight: FontWeight.w700),
+                      : const Text(
+                          'เข้าสู่ระบบผ่าน OIDC',
+                          style: TextStyle(fontWeight: FontWeight.w700),
                         ),
-                ),
-                TextButton(
-                  onPressed: _isLoading
-                      ? null
-                      : () => setState(() {
-                          _isRegistering = !_isRegistering;
-                          _error = null;
-                        }),
-                  child: Text(
-                    _isRegistering
-                        ? 'มีบัญชีแล้ว? เข้าสู่ระบบ'
-                        : 'ยังไม่มีบัญชี? สมัครสมาชิก',
-                    style: const TextStyle(color: _ink),
-                  ),
                 ),
               ],
             ),
@@ -212,8 +116,8 @@ class _LoginScreenState extends State<LoginScreen> {
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.service, required this.onSignOut});
 
-  final WorkoutService service;
-  final VoidCallback onSignOut;
+  final WorkoutViewModel service;
+  final Future<void> Function() onSignOut;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -311,18 +215,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _signOut() async {
-    Object? logoutError;
-    try {
-      await widget.service.logout();
-    } catch (error) {
-      logoutError = error;
-    }
+    await widget.onSignOut();
     if (mounted) {
-      widget.onSignOut();
-      if (logoutError != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('ออกจากระบบในเครื่องแล้ว: $logoutError')),
-        );
+      final error = context.read<AuthViewModel>().error;
+      if (error != null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('ออกจากระบบไม่สำเร็จ: $error')));
       }
     }
   }
@@ -592,7 +491,10 @@ class _BodySilhouetteStat extends StatelessWidget {
 }
 
 class _BodySilhouettePainter extends CustomPainter {
-  const _BodySilhouettePainter({required this.heightCm, required this.weightKg});
+  const _BodySilhouettePainter({
+    required this.heightCm,
+    required this.weightKg,
+  });
 
   final double? heightCm;
   final double? weightKg;
@@ -824,7 +726,7 @@ class ExerciseDetailScreen extends StatefulWidget {
     required this.difficulty,
   });
 
-  final WorkoutService service;
+  final WorkoutViewModel service;
   final WorkoutPlanDay day;
   final String focus;
   final String difficulty;
@@ -984,7 +886,8 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
                           total: exerciseCount,
                         ),
                         const SizedBox(height: 16),
-                        if (!widget.day.isCompleted && !widget.day.isRestDay) ...[
+                        if (!widget.day.isCompleted &&
+                            !widget.day.isRestDay) ...[
                           _WorkoutTimer(
                             elapsed: _elapsed,
                             isRunning: _timerRunning,
@@ -1217,7 +1120,7 @@ class _ExerciseCountdown extends StatelessWidget {
 class WorkoutHistoryScreen extends StatefulWidget {
   const WorkoutHistoryScreen({super.key, required this.service});
 
-  final WorkoutService service;
+  final WorkoutViewModel service;
 
   @override
   State<WorkoutHistoryScreen> createState() => _WorkoutHistoryScreenState();
@@ -1225,6 +1128,7 @@ class WorkoutHistoryScreen extends StatefulWidget {
 
 class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
   late Future<List<WorkoutRecord>> _historyTask;
+  int _historyGeneration = 0;
 
   @override
   void initState() {
@@ -1232,14 +1136,17 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
     _historyTask = widget.service.fetchWorkouts();
   }
 
-  void _retry() =>
-      setState(() => _historyTask = widget.service.fetchWorkouts());
+  void _retry() => setState(() {
+    _historyTask = widget.service.fetchWorkouts();
+    _historyGeneration++;
+  });
 
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('ประวัติการฝึก')),
     body: SafeArea(
       child: FutureBuilder<List<WorkoutRecord>>(
+        key: ValueKey(_historyGeneration),
         future: _historyTask,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -1256,18 +1163,173 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
             padding: const EdgeInsets.all(20),
             itemCount: workouts.length,
             separatorBuilder: (_, _) => const Divider(height: 1),
-            itemBuilder: (_, index) => _WorkoutRow(workouts[index]),
+            itemBuilder: (_, index) {
+              final workout = workouts[index];
+              return _WorkoutRow(
+                workout,
+                onTap: () => _showDetails(workout),
+                onEdit: () => _edit(workout),
+                onDelete: () => _delete(workout),
+              );
+            },
           );
         },
       ),
     ),
+  );
+
+  Future<void> _showDetails(WorkoutRecord workout) => showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(workout.title),
+      content: Text(
+        'วันที่ฝึก: ${workout.completedAt.toLocal()}\n'
+        'จำนวนท่า: ${workout.exerciseCount}\n'
+        'เวลา: ${workout.durationMinutes} นาที\n'
+        'แคลอรีโดยประมาณ: ${workout.caloriesBurned} kcal',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('ปิด'),
+        ),
+      ],
+    ),
+  );
+
+  Future<void> _edit(WorkoutRecord workout) async {
+    final durationMinutes = await showDialog<int>(
+      context: context,
+      builder: (_) => _EditWorkoutDurationDialog(
+        initialDurationMinutes: workout.durationMinutes,
+      ),
+    );
+    if (durationMinutes == null) return;
+
+    try {
+      await widget.service.updateWorkout(
+        id: workout.id,
+        durationMinutes: durationMinutes,
+      );
+      if (!mounted) return;
+      _retry();
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('อัปเดตประวัติการฝึกแล้ว')));
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('แก้ไขไม่สำเร็จ: $error')));
+      }
+    }
+  }
+
+  Future<void> _delete(WorkoutRecord workout) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('ลบประวัติการฝึก?'),
+        content: Text('ต้องการลบ “${workout.title}” หรือไม่'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('ยกเลิก'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('ลบ'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await widget.service.deleteWorkout(id: workout.id);
+      if (!mounted) return;
+      _retry();
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('ลบประวัติการฝึกแล้ว')));
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('ลบไม่สำเร็จ: $error')));
+      }
+    }
+  }
+}
+
+class _EditWorkoutDurationDialog extends StatefulWidget {
+  const _EditWorkoutDurationDialog({required this.initialDurationMinutes});
+
+  final int initialDurationMinutes;
+
+  @override
+  State<_EditWorkoutDurationDialog> createState() =>
+      _EditWorkoutDurationDialogState();
+}
+
+class _EditWorkoutDurationDialogState
+    extends State<_EditWorkoutDurationDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(
+      text: widget.initialDurationMinutes.toString(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('แก้ไขเวลาออกกำลังกาย'),
+    content: Form(
+      key: _formKey,
+      child: TextFormField(
+        controller: _controller,
+        keyboardType: TextInputType.number,
+        decoration: const InputDecoration(
+          labelText: 'เวลา (นาที)',
+          border: OutlineInputBorder(),
+        ),
+        validator: (value) {
+          final minutes = int.tryParse(value?.trim() ?? '');
+          if (minutes == null || minutes < 1 || minutes > 300) {
+            return 'กรอกเวลาระหว่าง 1–300 นาที';
+          }
+          return null;
+        },
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('ยกเลิก'),
+      ),
+      FilledButton(
+        onPressed: () {
+          if (_formKey.currentState!.validate()) {
+            Navigator.pop(context, int.parse(_controller.text.trim()));
+          }
+        },
+        child: const Text('บันทึก'),
+      ),
+    ],
   );
 }
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key, required this.service});
 
-  final WorkoutService service;
+  final WorkoutViewModel service;
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -1312,7 +1374,7 @@ class _ProfileForm extends StatefulWidget {
   const _ProfileForm({super.key, required this.profile, required this.service});
 
   final UserProfile profile;
-  final WorkoutService service;
+  final WorkoutViewModel service;
 
   @override
   State<_ProfileForm> createState() => _ProfileFormState();
@@ -1731,27 +1793,40 @@ class _WorkoutTimer extends StatelessWidget {
 }
 
 class _WorkoutRow extends StatelessWidget {
-  const _WorkoutRow(this.workout);
+  const _WorkoutRow(
+    this.workout, {
+    required this.onTap,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
   final WorkoutRecord workout;
+  final VoidCallback onTap;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 9),
-    child: Row(
-      children: [
-        const Icon(Icons.check_circle, color: Color(0xFF658344), size: 20),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            workout.title,
-            style: const TextStyle(fontWeight: FontWeight.w700),
-          ),
-        ),
-        Text(
-          '${workout.durationMinutes} นาที · ${workout.caloriesBurned} kcal',
-          style: const TextStyle(color: _muted, fontSize: 12),
-        ),
+  Widget build(BuildContext context) => ListTile(
+    onTap: onTap,
+    contentPadding: const EdgeInsets.symmetric(vertical: 4),
+    leading: const Icon(Icons.check_circle, color: Color(0xFF658344), size: 20),
+    title: Text(
+      workout.title,
+      style: const TextStyle(fontWeight: FontWeight.w700),
+    ),
+    subtitle: Text(
+      '${workout.durationMinutes} นาที · ${workout.caloriesBurned} kcal',
+      style: const TextStyle(color: _muted, fontSize: 12),
+    ),
+    trailing: PopupMenuButton<String>(
+      tooltip: 'จัดการรายการ',
+      onSelected: (action) {
+        if (action == 'edit') onEdit();
+        if (action == 'delete') onDelete();
+      },
+      itemBuilder: (_) => const [
+        PopupMenuItem(value: 'edit', child: Text('แก้ไข')),
+        PopupMenuItem(value: 'delete', child: Text('ลบ')),
       ],
     ),
   );

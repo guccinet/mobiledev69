@@ -182,9 +182,6 @@ class UserProfile {
 }
 
 abstract interface class WorkoutService {
-  Future<void> register({required String email, required String password});
-  Future<void> login({required String email, required String password});
-  Future<void> logout();
   Future<WorkoutPlan> fetchPlan({
     required String focus,
     required String difficulty,
@@ -204,16 +201,24 @@ abstract interface class WorkoutService {
     required int dayNumber,
     required int durationMinutes,
   });
+  Future<WorkoutRecord> updateWorkout({
+    required String id,
+    required int durationMinutes,
+  });
+  Future<void> deleteWorkout({required String id});
 }
 
 class WorkoutApi implements WorkoutService {
-  WorkoutApi({http.Client? client, Uri? baseUri})
-    : _client = client ?? http.Client(),
-      _baseUri = baseUri ?? _defaultBaseUri;
+  WorkoutApi({
+    required this.accessTokenProvider,
+    http.Client? client,
+    Uri? baseUri,
+  }) : _client = client ?? http.Client(),
+       _baseUri = baseUri ?? _defaultBaseUri;
 
   final http.Client _client;
   final Uri _baseUri;
-  String? _token;
+  final Future<String?> Function() accessTokenProvider;
 
   static Uri get _defaultBaseUri {
     const configuredUrl = String.fromEnvironment('API_BASE_URL');
@@ -225,49 +230,6 @@ class WorkoutApi implements WorkoutService {
   }
 
   @override
-  Future<void> register({
-    required String email,
-    required String password,
-  }) async {
-    await _authenticate('auth/register', email: email, password: password);
-  }
-
-  @override
-  Future<void> login({required String email, required String password}) async {
-    await _authenticate('auth/login', email: email, password: password);
-  }
-
-  Future<void> _authenticate(
-    String resource, {
-    required String email,
-    required String password,
-  }) async {
-    final response = await _client.post(
-      _endpoint(resource),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'email': email, 'password': password}),
-    );
-    _ensureSuccess(response);
-    final result = jsonDecode(response.body) as Map<String, dynamic>;
-    _token = result['token'] as String;
-  }
-
-  @override
-  Future<void> logout() async {
-    try {
-      if (_token != null) {
-        final response = await _client.post(
-          _endpoint('auth/logout'),
-          headers: _headers,
-        );
-        _ensureSuccess(response);
-      }
-    } finally {
-      _token = null;
-    }
-  }
-
-  @override
   Future<WorkoutPlan> fetchPlan({
     required String focus,
     required String difficulty,
@@ -275,7 +237,7 @@ class WorkoutApi implements WorkoutService {
     final response = await _client.get(
       _endpoint('plan')
           .replace(queryParameters: {'focus': focus, 'difficulty': difficulty}),
-      headers: _headers,
+      headers: await _headers,
     );
     _ensureSuccess(response);
     return WorkoutPlan.fromJson(
@@ -287,7 +249,7 @@ class WorkoutApi implements WorkoutService {
   Future<List<WorkoutRecord>> fetchWorkouts() async {
     final response = await _client.get(
       _endpoint('workouts'),
-      headers: _headers,
+      headers: await _headers,
     );
     _ensureSuccess(response);
     final items = jsonDecode(response.body) as List<dynamic>;
@@ -298,7 +260,10 @@ class WorkoutApi implements WorkoutService {
 
   @override
   Future<WorkoutStats> fetchStats() async {
-    final response = await _client.get(_endpoint('stats'), headers: _headers);
+    final response = await _client.get(
+      _endpoint('stats'),
+      headers: await _headers,
+    );
     _ensureSuccess(response);
     return WorkoutStats.fromJson(
       jsonDecode(response.body) as Map<String, dynamic>,
@@ -307,7 +272,10 @@ class WorkoutApi implements WorkoutService {
 
   @override
   Future<UserProfile> fetchProfile() async {
-    final response = await _client.get(_endpoint('profile'), headers: _headers);
+    final response = await _client.get(
+      _endpoint('profile'),
+      headers: await _headers,
+    );
     _ensureSuccess(response);
     return UserProfile.fromJson(
       jsonDecode(response.body) as Map<String, dynamic>,
@@ -323,7 +291,7 @@ class WorkoutApi implements WorkoutService {
   }) async {
     final response = await _client.patch(
       _endpoint('profile'),
-      headers: _headers,
+      headers: await _headers,
       body: jsonEncode({
         'gender': gender,
         'age': age,
@@ -346,7 +314,7 @@ class WorkoutApi implements WorkoutService {
   }) async {
     final response = await _client.post(
       _endpoint('workouts'),
-      headers: _headers,
+      headers: await _headers,
       body: jsonEncode({
         'focus': focus,
         'difficulty': difficulty,
@@ -360,14 +328,45 @@ class WorkoutApi implements WorkoutService {
     );
   }
 
+  @override
+  Future<WorkoutRecord> updateWorkout({
+    required String id,
+    required int durationMinutes,
+  }) async {
+    final response = await _client.patch(
+      _endpoint('workouts/$id'),
+      headers: await _headers,
+      body: jsonEncode({'durationMinutes': durationMinutes}),
+    );
+    _ensureSuccess(response);
+    return WorkoutRecord.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  @override
+  Future<void> deleteWorkout({required String id}) async {
+    final response = await _client.delete(
+      _endpoint('workouts/$id'),
+      headers: await _headers,
+    );
+    _ensureSuccess(response);
+  }
+
   Uri _endpoint(String resource) => _baseUri.replace(
     path: '${_baseUri.path.replaceFirst(RegExp(r'/$'), '')}/$resource',
   );
 
-  Map<String, String> get _headers => {
-    'Content-Type': 'application/json',
-    if (_token != null) 'Authorization': 'Token $_token',
-  };
+  Future<Map<String, String>> get _headers async {
+    final accessToken = await accessTokenProvider();
+    if (accessToken == null || accessToken.isEmpty) {
+      throw StateError('ไม่พบ access token กรุณาเข้าสู่ระบบใหม่');
+    }
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $accessToken',
+    };
+  }
 
   void _ensureSuccess(http.Response response) {
     if (response.statusCode < 200 || response.statusCode >= 300) {

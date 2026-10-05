@@ -9,9 +9,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:home_workout_frontend/exercise_guide.dart';
 import 'package:home_workout_frontend/exercise_illustration.dart';
+import 'package:home_workout_frontend/home_screen.dart';
 import 'package:home_workout_frontend/home_workout_app.dart';
+import 'package:home_workout_frontend/oidc_auth_service.dart';
 import 'package:home_workout_frontend/progress_screen.dart';
 import 'package:home_workout_frontend/workout_api.dart';
+import 'package:home_workout_frontend/workout_repository.dart';
+import 'package:home_workout_frontend/workout_view_model.dart';
 
 void main() {
   test('workout plan identifies recovery days returned by the API', () {
@@ -118,7 +122,11 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MaterialApp(home: WorkoutProgressScreen(service: service)),
+      MaterialApp(
+        home: WorkoutProgressScreen(
+          service: WorkoutViewModel(WorkoutRepository(service)),
+        ),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -137,6 +145,55 @@ void main() {
     expect(find.text('10 นาทีใน 8 สัปดาห์'), findsOneWidget);
   });
 
+  testWidgets('workout history supports detail, update, and delete', (
+    tester,
+  ) async {
+    final service = _FakeWorkoutService();
+    service._workouts.add(
+      WorkoutRecord(
+        id: 'history-1',
+        title: 'หน้าท้อง · วันที่ 1',
+        focus: 'abs',
+        dayNumber: 1,
+        exerciseCount: 4,
+        caloriesBurned: 50,
+        durationMinutes: 10,
+        completedAt: DateTime(2026, 10, 5),
+      ),
+    );
+    final viewModel = WorkoutViewModel(WorkoutRepository(service));
+
+    await tester.pumpWidget(
+      MaterialApp(home: WorkoutHistoryScreen(service: viewModel)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('หน้าท้อง · วันที่ 1'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('จำนวนท่า: 4'), findsOneWidget);
+    await tester.tap(find.text('ปิด'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('จัดการรายการ'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('แก้ไข'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField), '12');
+    await tester.tap(find.text('บันทึก'));
+    await tester.pumpAndSettle();
+    expect(service._workouts.single.durationMinutes, 12);
+
+    await tester.tap(find.byTooltip('จัดการรายการ'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('ลบ').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('ลบ').last);
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(service._workouts, isEmpty);
+    expect(find.text('หน้าท้อง · วันที่ 1'), findsNothing);
+  });
+
   testWidgets('recovery day appears on calendar without starting a workout', (
     tester,
   ) async {
@@ -144,11 +201,11 @@ void main() {
       currentDay: 4,
       hasRecoveryRestDay: true,
     );
-    await tester.pumpWidget(HomeWorkoutApp(service: service));
+    await tester.pumpWidget(
+      HomeWorkoutApp(service: service, authService: _FakeOidcAuthService()),
+    );
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField).at(0), 'test@example.com');
-    await tester.enterText(find.byType(TextField).at(1), 'StrongPass123!');
-    await tester.tap(find.text('เข้าสู่ระบบ'));
+    await tester.tap(find.text('เข้าสู่ระบบผ่าน OIDC'));
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
@@ -250,13 +307,13 @@ void main() {
       weightKg: 62.5,
       heightCm: 168,
     );
-    await tester.pumpWidget(HomeWorkoutApp(service: service));
+    await tester.pumpWidget(
+      HomeWorkoutApp(service: service, authService: _FakeOidcAuthService()),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('ยินดีต้อนรับกลับ'), findsOneWidget);
-    await tester.enterText(find.byType(TextField).at(0), 'test@example.com');
-    await tester.enterText(find.byType(TextField).at(1), 'StrongPass123!');
-    await tester.tap(find.text('เข้าสู่ระบบ'));
+    await tester.tap(find.text('เข้าสู่ระบบผ่าน OIDC'));
     await tester.pumpAndSettle();
 
     expect(find.text('พื้นที่เล็ก ๆ\nเพื่อร่างกายที่ดีขึ้น'), findsOneWidget);
@@ -386,18 +443,6 @@ class _FakeWorkoutService implements WorkoutService {
   final List<WorkoutRecord> _workouts = [];
 
   @override
-  Future<void> register({
-    required String email,
-    required String password,
-  }) async {}
-
-  @override
-  Future<void> login({required String email, required String password}) async {}
-
-  @override
-  Future<void> logout() async {}
-
-  @override
   Future<WorkoutPlan> fetchPlan({
     required String focus,
     required String difficulty,
@@ -516,4 +561,51 @@ class _FakeWorkoutService implements WorkoutService {
     _workouts.add(workout);
     return workout;
   }
+
+  @override
+  Future<WorkoutRecord> updateWorkout({
+    required String id,
+    required int durationMinutes,
+  }) async {
+    final index = _workouts.indexWhere((workout) => workout.id == id);
+    if (index < 0) throw StateError('Workout not found');
+    final old = _workouts[index];
+    final updated = WorkoutRecord(
+      id: old.id,
+      title: old.title,
+      focus: old.focus,
+      dayNumber: old.dayNumber,
+      exerciseCount: old.exerciseCount,
+      caloriesBurned: durationMinutes * 5,
+      durationMinutes: durationMinutes,
+      completedAt: old.completedAt,
+    );
+    _workouts[index] = updated;
+    return updated;
+  }
+
+  @override
+  Future<void> deleteWorkout({required String id}) async {
+    _workouts.removeWhere((workout) => workout.id == id);
+  }
+}
+
+class _FakeOidcAuthService extends OidcAuthService {
+  bool _authenticated = false;
+
+  @override
+  bool get isAuthenticated => _authenticated;
+
+  @override
+  Future<void> initialize() async {}
+
+  @override
+  Future<void> signIn() async => _authenticated = true;
+
+  @override
+  Future<void> signOut() async => _authenticated = false;
+
+  @override
+  Future<String?> getAccessToken() async =>
+      _authenticated ? 'test-token' : null;
 }
