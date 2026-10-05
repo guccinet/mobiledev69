@@ -29,6 +29,13 @@ class WorkoutRepository {
   Future<DataResult<UserProfile>> fetchProfile() =>
       _run(_service.fetchProfile);
 
+  Future<DataResult<List<WeightEntry>>> fetchWeightHistory() =>
+      _run(_service.fetchWeightHistory);
+
+  Future<DataResult<WeightEntry>> recordWeight({
+    required double weightKg,
+  }) => _run(() => _service.recordWeight(weightKg: weightKg));
+
   Future<DataResult<UserProfile>> updateProfile({
     required String? gender,
     required int? age,

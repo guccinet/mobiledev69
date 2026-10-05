@@ -6,6 +6,7 @@ from .views import (
     PlanView,
     ProfileView,
     StatsView,
+    WeightHistoryView,
     WorkoutListView,
     WorkoutDetailView,
 )
@@ -14,6 +15,7 @@ from .views import (
 urlpatterns = [
     path("health", HealthView.as_view(), name="health"),
     path("profile", ProfileView.as_view(), name="profile"),
+    path("weights", WeightHistoryView.as_view(), name="weight-history"),
     path("exercises", ExerciseListView.as_view(), name="exercises"),
     path("plan", PlanView.as_view(), name="plan"),
     path("workouts", WorkoutListView.as_view(), name="workouts"),

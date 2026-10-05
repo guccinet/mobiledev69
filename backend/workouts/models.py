@@ -36,6 +36,19 @@ class UserProfile(models.Model):
     )
 
 
+class WeightEntry(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="weight_entries",
+    )
+    weight_kg = models.DecimalField(max_digits=5, decimal_places=1)
+    recorded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["recorded_at", "id"]
+
+
 class Challenge(models.Model):
     FOCUS_CHOICES = [
         ("abs", "Abs"),
@@ -78,7 +91,7 @@ class Workout(models.Model):
     title = models.CharField(max_length=100)
     duration_minutes = models.PositiveSmallIntegerField()
     exercise_count = models.PositiveSmallIntegerField()
-    calories_burned = models.PositiveSmallIntegerField()
+    calories_burned = models.PositiveSmallIntegerField(null=True, blank=True)
     completed_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

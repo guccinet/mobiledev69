@@ -110,13 +110,13 @@ class WorkoutStats {
 
   final int completedDays;
   final int totalExercises;
-  final int totalCalories;
+  final int? totalCalories;
   final int totalMinutes;
 
   factory WorkoutStats.fromJson(Map<String, dynamic> json) => WorkoutStats(
     completedDays: json['completedDays'] as int,
     totalExercises: json['totalExercises'] as int,
-    totalCalories: json['totalCalories'] as int,
+    totalCalories: json['totalCalories'] as int?,
     totalMinutes: json['totalMinutes'] as int,
   );
 }
@@ -138,7 +138,7 @@ class WorkoutRecord {
   final String focus;
   final int dayNumber;
   final int exerciseCount;
-  final int caloriesBurned;
+  final int? caloriesBurned;
   final int durationMinutes;
   final DateTime completedAt;
 
@@ -148,7 +148,7 @@ class WorkoutRecord {
     focus: json['focus'] as String,
     dayNumber: json['dayNumber'] as int,
     exerciseCount: json['exerciseCount'] as int,
-    caloriesBurned: json['caloriesBurned'] as int,
+    caloriesBurned: json['caloriesBurned'] as int?,
     durationMinutes: json['durationMinutes'] as int,
     completedAt: DateTime.parse(json['completedAt'] as String),
   );
@@ -181,6 +181,20 @@ class UserProfile {
       value == null ? null : double.parse(value.toString());
 }
 
+class WeightEntry {
+  const WeightEntry({required this.id, required this.weightKg, required this.recordedAt});
+
+  final int id;
+  final double weightKg;
+  final DateTime recordedAt;
+
+  factory WeightEntry.fromJson(Map<String, dynamic> json) => WeightEntry(
+    id: json['id'] as int,
+    weightKg: double.parse(json['weightKg'].toString()),
+    recordedAt: DateTime.parse(json['recordedAt'] as String),
+  );
+}
+
 abstract interface class WorkoutService {
   Future<WorkoutPlan> fetchPlan({
     required String focus,
@@ -189,6 +203,8 @@ abstract interface class WorkoutService {
   Future<List<WorkoutRecord>> fetchWorkouts();
   Future<WorkoutStats> fetchStats();
   Future<UserProfile> fetchProfile();
+  Future<List<WeightEntry>> fetchWeightHistory();
+  Future<WeightEntry> recordWeight({required double weightKg});
   Future<UserProfile> updateProfile({
     required String? gender,
     required int? age,
@@ -278,6 +294,32 @@ class WorkoutApi implements WorkoutService {
     );
     _ensureSuccess(response);
     return UserProfile.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  @override
+  Future<List<WeightEntry>> fetchWeightHistory() async {
+    final response = await _client.get(
+      _endpoint('weights'),
+      headers: await _headers,
+    );
+    _ensureSuccess(response);
+    final items = jsonDecode(response.body) as List<dynamic>;
+    return items
+        .map((item) => WeightEntry.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<WeightEntry> recordWeight({required double weightKg}) async {
+    final response = await _client.post(
+      _endpoint('weights'),
+      headers: await _headers,
+      body: jsonEncode({'weightKg': weightKg}),
+    );
+    _ensureSuccess(response);
+    return WeightEntry.fromJson(
       jsonDecode(response.body) as Map<String, dynamic>,
     );
   }

@@ -20,11 +20,13 @@ from .catalog import (
     get_or_create_challenge,
     make_plan,
 )
+from .calorie_estimation import estimate_calories_burned
 from .forms import RegistrationForm
-from .models import UserProfile, Workout
+from .models import UserProfile, WeightEntry, Workout
 from .serializers import (
     CompleteWorkoutSerializer,
     UserProfileSerializer,
+    WeightEntrySerializer,
     WorkoutUpdateSerializer,
 )
 
@@ -77,6 +79,14 @@ def workout_json(workout):
     }
 
 
+@transaction.atomic
+def record_weight(user, weight_kg):
+    profile, _ = UserProfile.objects.get_or_create(user=user)
+    profile.weight_kg = weight_kg
+    profile.save(update_fields=["weight_kg"])
+    return WeightEntry.objects.create(user=user, weight_kg=weight_kg)
+
+
 class HealthView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
@@ -92,14 +102,42 @@ class ProfileView(APIView):
 
     def patch(self, request):
         profile, _ = UserProfile.objects.get_or_create(user=request.user)
+        previous_weight = profile.weight_kg
         serializer = UserProfileSerializer(
             profile,
             data=request.data,
             partial=True,
         )
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        with transaction.atomic():
+            serializer.save()
+            if (
+                profile.weight_kg is not None
+                and profile.weight_kg != previous_weight
+            ):
+                WeightEntry.objects.create(
+                    user=request.user,
+                    weight_kg=profile.weight_kg,
+                )
         return Response(serializer.data)
+
+
+class WeightHistoryView(APIView):
+    def get(self, request):
+        entries = WeightEntry.objects.filter(user=request.user)
+        return Response(WeightEntrySerializer(entries, many=True).data)
+
+    def post(self, request):
+        serializer = WeightEntrySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        entry = record_weight(
+            request.user,
+            serializer.validated_data["weight_kg"],
+        )
+        return Response(
+            WeightEntrySerializer(entry).data,
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class ExerciseListView(APIView):
@@ -165,13 +203,18 @@ class WorkoutListView(APIView):
             )
         exercise_count = len(day["exercises"])
         duration_minutes = data["durationMinutes"]
+        profile, _ = UserProfile.objects.get_or_create(user=request.user)
         workout = Workout.objects.create(
             challenge=challenge,
             day_number=day_number,
             title=day["title"],
             duration_minutes=duration_minutes,
             exercise_count=exercise_count,
-            calories_burned=max(1, round(duration_minutes * 5)),
+            calories_burned=estimate_calories_burned(
+                profile.weight_kg,
+                duration_minutes,
+                challenge.difficulty,
+            ),
         )
         return Response(workout_json(workout), status=status.HTTP_201_CREATED)
 
@@ -199,6 +242,7 @@ class WorkoutDetailView(APIView):
             workout,
             data=request.data,
             partial=partial,
+            context={"request": request},
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
@@ -217,11 +261,19 @@ class StatsView(APIView):
             calories_burned=Sum("calories_burned"),
             duration_minutes=Sum("duration_minutes"),
         )
+        has_calculated_calories = workouts.filter(
+            calories_burned__isnull=False
+        ).exists()
+        total_calories = (
+            (totals["calories_burned"] or 0)
+            if has_calculated_calories
+            else None
+        )
         return Response(
             {
                 "completedDays": workouts.values("completed_at__date").distinct().count(),
                 "totalExercises": totals["exercise_count"] or 0,
-                "totalCalories": totals["calories_burned"] or 0,
+                "totalCalories": total_calories,
                 "totalMinutes": totals["duration_minutes"] or 0,
             }
         )

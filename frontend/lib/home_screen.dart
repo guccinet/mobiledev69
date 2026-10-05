@@ -149,6 +149,7 @@ class _HomeScreenState extends State<HomeScreen> {
     totalMinutes: 0,
   );
   UserProfile _profile = const UserProfile(email: '');
+  List<WeightEntry> _weightHistory = const [];
   Object? _loadError;
 
   @override
@@ -166,12 +167,14 @@ class _HomeScreenState extends State<HomeScreen> {
         widget.service.fetchPlan(focus: focus, difficulty: difficulty),
         widget.service.fetchStats(),
         widget.service.fetchProfile(),
+        widget.service.fetchWeightHistory(),
       ]);
       if (!mounted || generation != _loadGeneration) return;
       setState(() {
         _plan = results[0] as WorkoutPlan;
         _stats = results[1] as WorkoutStats;
         _profile = results[2] as UserProfile;
+        _weightHistory = results[3] as List<WeightEntry>;
         _loadError = null;
       });
     } catch (error) {
@@ -284,6 +287,18 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const SizedBox(height: 20),
                       _StatsCard(stats: _stats, profile: _profile),
+                      if (isWeightUpdateDue(_weightHistory)) ...[
+                        const SizedBox(height: 12),
+                        _WeightReminderCard(
+                          onUpdate: () => Navigator.of(context).push<void>(
+                            MaterialPageRoute(
+                              builder: (_) => WorkoutProgressScreen(
+                                service: widget.service,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 28),
                       const _SectionHeading(
                         title: 'เลือกพื้นที่ฝึก',
@@ -419,6 +434,38 @@ class _TopBar extends StatelessWidget {
   }
 }
 
+class _WeightReminderCard extends StatelessWidget {
+  const _WeightReminderCard({required this.onUpdate});
+
+  final VoidCallback onUpdate;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: const ValueKey('weight-update-reminder'),
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: const Color(0xFFE6E9D8),
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Row(
+      children: [
+        const Icon(Icons.monitor_weight_outlined, color: _ink),
+        const SizedBox(width: 10),
+        const Expanded(
+          child: Text(
+            'ถึงเวลาอัปเดตน้ำหนักประจำสัปดาห์',
+            style: TextStyle(color: _ink, fontWeight: FontWeight.w700),
+          ),
+        ),
+        TextButton(
+          onPressed: onUpdate,
+          child: const Text('บันทึก'),
+        ),
+      ],
+    ),
+  );
+}
+
 class _StatsCard extends StatelessWidget {
   const _StatsCard({required this.stats, required this.profile});
 
@@ -437,13 +484,16 @@ class _StatsCard extends StatelessWidget {
         Row(
           children: [
             _BodySilhouetteStat(profile: profile),
-            _StatItem(value: '${stats.totalCalories}', label: 'แคลอรี'),
+            _StatItem(
+              value: stats.totalCalories?.toString() ?? '—',
+              label: 'แคลอรี',
+            ),
             _StatItem(value: '${stats.totalMinutes}', label: 'นาที'),
           ],
         ),
         const SizedBox(height: 10),
         const Text(
-          'แคลอรีเป็นค่าประมาณจากเวลาที่บันทึก',
+          'แคลอรีประมาณด้วย MET · คิดเฉพาะรายการที่มีน้ำหนัก',
           style: TextStyle(color: Color(0xFFD5DCD7), fontSize: 11),
         ),
       ],
@@ -1186,7 +1236,7 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
         'วันที่ฝึก: ${workout.completedAt.toLocal()}\n'
         'จำนวนท่า: ${workout.exerciseCount}\n'
         'เวลา: ${workout.durationMinutes} นาที\n'
-        'แคลอรีโดยประมาณ: ${workout.caloriesBurned} kcal',
+        'แคลอรีโดยประมาณ: ${workout.caloriesBurned == null ? 'ยังคำนวณไม่ได้ (กรอกน้ำหนักในโปรไฟล์)' : '${workout.caloriesBurned} kcal'}',
       ),
       actions: [
         TextButton(
@@ -1815,7 +1865,7 @@ class _WorkoutRow extends StatelessWidget {
       style: const TextStyle(fontWeight: FontWeight.w700),
     ),
     subtitle: Text(
-      '${workout.durationMinutes} นาที · ${workout.caloriesBurned} kcal',
+      '${workout.durationMinutes} นาที · ${workout.caloriesBurned == null ? 'กรอกน้ำหนักเพื่อคำนวณแคลอรี' : '${workout.caloriesBurned} kcal'}',
       style: const TextStyle(color: _muted, fontSize: 12),
     ),
     trailing: PopupMenuButton<String>(

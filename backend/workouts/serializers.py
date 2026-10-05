@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
-from .models import UserProfile
+from .calorie_estimation import estimate_calories_burned
+from .models import UserProfile, WeightEntry
 
 
 class CompleteWorkoutSerializer(serializers.Serializer):
@@ -49,6 +50,22 @@ class UserProfileSerializer(serializers.ModelSerializer):
         fields = ["email", "gender", "age", "weightKg", "heightCm"]
 
 
+class WeightEntrySerializer(serializers.ModelSerializer):
+    weightKg = serializers.DecimalField(
+        source="weight_kg",
+        max_digits=5,
+        decimal_places=1,
+        min_value=1,
+        max_value=500,
+    )
+    recordedAt = serializers.DateTimeField(source="recorded_at", read_only=True)
+
+    class Meta:
+        model = WeightEntry
+        fields = ["id", "weightKg", "recordedAt"]
+        read_only_fields = ["id", "recordedAt"]
+
+
 class WorkoutUpdateSerializer(serializers.Serializer):
     title = serializers.CharField(max_length=100, trim_whitespace=True)
     durationMinutes = serializers.IntegerField(min_value=1, max_value=300)
@@ -57,6 +74,12 @@ class WorkoutUpdateSerializer(serializers.Serializer):
         instance.title = validated_data.get("title", instance.title)
         duration = validated_data.get("durationMinutes", instance.duration_minutes)
         instance.duration_minutes = duration
-        instance.calories_burned = max(1, round(duration * 5))
+        request = self.context.get("request")
+        profile, _ = UserProfile.objects.get_or_create(user=request.user)
+        instance.calories_burned = estimate_calories_burned(
+            profile.weight_kg,
+            duration,
+            instance.challenge.difficulty,
+        )
         instance.save(update_fields=["title", "duration_minutes", "calories_burned"])
         return instance

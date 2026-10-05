@@ -133,6 +133,11 @@ void main() {
     expect(find.text('ความก้าวหน้า'), findsOneWidget);
     expect(find.text('สรุปผลรายสัปดาห์ในช่วง 8 สัปดาห์ล่าสุด'), findsOneWidget);
     expect(find.byKey(const ValueKey('weekly-progress-chart')), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('ระดับที่แนะนำ'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('ระดับที่แนะนำ'), findsOneWidget);
     expect(
       find.textContaining('เพศและน้ำหนักไม่ได้ใช้ตัดสินระดับโดยตรง'),
@@ -143,6 +148,66 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('เวลาออกกำลังกาย'), findsOneWidget);
     expect(find.text('10 นาทีใน 8 สัปดาห์'), findsOneWidget);
+  });
+
+  test('weekly weight reminder is due after seven calendar days', () {
+    final now = DateTime(2026, 10, 6, 9);
+    expect(isWeightUpdateDue(const [], now: now), isTrue);
+    expect(
+      isWeightUpdateDue([
+        WeightEntry(id: 1, weightKg: 65, recordedAt: DateTime(2026, 9, 30, 18)),
+      ], now: now),
+      isFalse,
+    );
+    expect(
+      isWeightUpdateDue([
+        WeightEntry(id: 1, weightKg: 65, recordedAt: DateTime(2026, 9, 29, 18)),
+      ], now: now),
+      isTrue,
+    );
+  });
+
+  testWidgets('progress screen logs weight and renders its history chart', (
+    tester,
+  ) async {
+    final service = _FakeWorkoutService();
+    service.weightHistory.addAll([
+      WeightEntry(
+        id: 1,
+        weightKg: 70,
+        recordedAt: DateTime.now().subtract(const Duration(days: 14)),
+      ),
+      WeightEntry(
+        id: 2,
+        weightKg: 69.5,
+        recordedAt: DateTime.now().subtract(const Duration(days: 7)),
+      ),
+    ]);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WorkoutProgressScreen(
+          service: WorkoutViewModel(WorkoutRepository(service)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('weight-history-chart')), findsOneWidget);
+    expect(find.text('ติดตามน้ำหนัก'), findsOneWidget);
+    expect(find.textContaining('เปลี่ยนแปลง -0.5 กก.'), findsOneWidget);
+    expect(find.text('ถึงเวลาอัปเดตน้ำหนักประจำสัปดาห์แล้ว'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('weight-entry-input')),
+      '69',
+    );
+    await tester.tap(find.byKey(const ValueKey('record-weight-button')));
+    await tester.pumpAndSettle();
+
+    expect(service.weightHistory.last.weightKg, 69);
+    expect(service.profile.weightKg, 69);
+    expect(find.text('บันทึกน้ำหนักเรียบร้อยแล้ว'), findsOneWidget);
+    expect(find.text('ถึงเวลาอัปเดตน้ำหนักประจำสัปดาห์แล้ว'), findsNothing);
   });
 
   testWidgets('workout history supports detail, update, and delete', (
@@ -318,6 +383,11 @@ void main() {
 
     expect(find.text('พื้นที่เล็ก ๆ\nเพื่อร่างกายที่ดีขึ้น'), findsOneWidget);
     expect(find.text('เลือกพื้นที่ฝึก'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('ชาเลนจ์ 4 สัปดาห์'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('ชาเลนจ์ 4 สัปดาห์'), findsOneWidget);
     expect(find.text('ท่าที่ฝึก'), findsNothing);
     expect(
@@ -325,6 +395,8 @@ void main() {
       findsOneWidget,
     );
 
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, 1000));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('โปรไฟล์'));
     await tester.pumpAndSettle();
     expect(find.text('ข้อมูลส่วนตัว'), findsOneWidget);
@@ -354,6 +426,11 @@ void main() {
     await tester.tap(find.byTooltip('ความก้าวหน้า'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('weekly-progress-chart')), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('ระดับที่แนะนำ'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('ระดับที่แนะนำ'), findsOneWidget);
     await tester.pageBack();
     await tester.pumpAndSettle();
@@ -441,6 +518,7 @@ class _FakeWorkoutService implements WorkoutService {
   UserProfile profile = const UserProfile(email: 'test@example.com');
   bool createdWorkout = false;
   final List<WorkoutRecord> _workouts = [];
+  final List<WeightEntry> weightHistory = [];
 
   @override
   Future<WorkoutPlan> fetchPlan({
@@ -510,9 +588,9 @@ class _FakeWorkoutService implements WorkoutService {
       0,
       (total, workout) => total + workout.exerciseCount,
     ),
-    totalCalories: _workouts.fold(
+    totalCalories: _workouts.fold<int>(
       0,
-      (total, workout) => total + workout.caloriesBurned,
+      (total, workout) => total + (workout.caloriesBurned ?? 0),
     ),
     totalMinutes: _workouts.fold(
       0,
@@ -524,12 +602,34 @@ class _FakeWorkoutService implements WorkoutService {
   Future<UserProfile> fetchProfile() async => profile;
 
   @override
+  Future<List<WeightEntry>> fetchWeightHistory() async => weightHistory;
+
+  @override
+  Future<WeightEntry> recordWeight({required double weightKg}) async {
+    profile = UserProfile(
+      email: profile.email,
+      gender: profile.gender,
+      age: profile.age,
+      weightKg: weightKg,
+      heightCm: profile.heightCm,
+    );
+    final entry = WeightEntry(
+      id: weightHistory.length + 1,
+      weightKg: weightKg,
+      recordedAt: DateTime.now(),
+    );
+    weightHistory.add(entry);
+    return entry;
+  }
+
+  @override
   Future<UserProfile> updateProfile({
     required String? gender,
     required int? age,
     required double? weightKg,
     required double? heightCm,
   }) async {
+    final weightChanged = weightKg != profile.weightKg;
     profile = UserProfile(
       email: profile.email,
       gender: gender,
@@ -537,6 +637,9 @@ class _FakeWorkoutService implements WorkoutService {
       weightKg: weightKg,
       heightCm: heightCm,
     );
+    if (weightChanged && weightKg != null) {
+      await recordWeight(weightKg: weightKg);
+    }
     return profile;
   }
 

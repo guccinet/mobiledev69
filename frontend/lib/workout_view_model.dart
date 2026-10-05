@@ -33,6 +33,12 @@ class WorkoutViewModel {
 
   Future<UserProfile> fetchProfile() => _unwrap(_repository.fetchProfile());
 
+  Future<List<WeightEntry>> fetchWeightHistory() =>
+      _unwrap(_repository.fetchWeightHistory());
+
+  Future<WeightEntry> recordWeight({required double weightKg}) =>
+      _unwrap(_repository.recordWeight(weightKg: weightKg));
+
   Future<UserProfile> updateProfile({
     required String? gender,
     required int? age,

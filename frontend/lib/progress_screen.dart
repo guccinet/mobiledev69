@@ -82,6 +82,15 @@ WorkoutLevelRecommendation recommendWorkoutDifficulty(
   );
 }
 
+bool isWeightUpdateDue(List<WeightEntry> entries, {DateTime? now}) {
+  if (entries.isEmpty) return true;
+  final reference = now ?? DateTime.now();
+  final latest = entries.last.recordedAt.toLocal();
+  final today = DateTime(reference.year, reference.month, reference.day);
+  final lastRecordedDay = DateTime(latest.year, latest.month, latest.day);
+  return today.difference(lastRecordedDay).inDays >= 7;
+}
+
 class WorkoutProgressScreen extends StatefulWidget {
   const WorkoutProgressScreen({super.key, required this.service});
 
@@ -92,8 +101,16 @@ class WorkoutProgressScreen extends StatefulWidget {
 }
 
 class _WorkoutProgressScreenState extends State<WorkoutProgressScreen> {
-  late Future<({UserProfile profile, List<WorkoutRecord> workouts})> _loadTask;
+  late Future<
+    ({
+      UserProfile profile,
+      List<WorkoutRecord> workouts,
+      List<WeightEntry> weights,
+    })
+  >
+  _loadTask;
   ProgressMetric _metric = ProgressMetric.workouts;
+  int _loadGeneration = 0;
 
   @override
   void initState() {
@@ -101,25 +118,55 @@ class _WorkoutProgressScreenState extends State<WorkoutProgressScreen> {
     _loadTask = _load();
   }
 
-  Future<({UserProfile profile, List<WorkoutRecord> workouts})> _load() async {
+  Future<
+    ({
+      UserProfile profile,
+      List<WorkoutRecord> workouts,
+      List<WeightEntry> weights,
+    })
+  >
+  _load() async {
+    _loadGeneration++;
     final results = await Future.wait<Object>([
       widget.service.fetchProfile(),
       widget.service.fetchWorkouts(),
+      widget.service.fetchWeightHistory(),
     ]);
     return (
       profile: results[0] as UserProfile,
       workouts: results[1] as List<WorkoutRecord>,
+      weights: results[2] as List<WeightEntry>,
     );
   }
 
-  void _retry() => setState(() => _loadTask = _load());
+  void _retry() => setState(() {
+    _loadTask = _load();
+  });
+
+  Future<void> _recordWeight(double weightKg) async {
+    await widget.service.recordWeight(weightKg: weightKg);
+    if (!mounted) return;
+    setState(() {
+      _loadTask = _load();
+    });
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('บันทึกน้ำหนักเรียบร้อยแล้ว')));
+  }
 
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('ความก้าวหน้า')),
     body: SafeArea(
       child:
-          FutureBuilder<({UserProfile profile, List<WorkoutRecord> workouts})>(
+          FutureBuilder<
+            ({
+              UserProfile profile,
+              List<WorkoutRecord> workouts,
+              List<WeightEntry> weights,
+            })
+          >(
+            key: ValueKey(_loadGeneration),
             future: _loadTask,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
@@ -130,13 +177,16 @@ class _WorkoutProgressScreenState extends State<WorkoutProgressScreen> {
               }
               final data = snapshot.data!;
               return _ProgressContent(
+                profile: data.profile,
                 workouts: data.workouts,
+                weights: data.weights,
                 recommendation: recommendWorkoutDifficulty(
                   data.profile,
                   data.workouts,
                 ),
                 metric: _metric,
                 onMetricChanged: (metric) => setState(() => _metric = metric),
+                onRecordWeight: _recordWeight,
               );
             },
           ),
@@ -147,20 +197,27 @@ class _WorkoutProgressScreenState extends State<WorkoutProgressScreen> {
 class _ProgressContent extends StatelessWidget {
   const _ProgressContent({
     required this.workouts,
+    required this.weights,
     required this.recommendation,
     required this.metric,
     required this.onMetricChanged,
+    required this.onRecordWeight,
+    required this.profile,
   });
 
   final List<WorkoutRecord> workouts;
+  final List<WeightEntry> weights;
+  final UserProfile profile;
   final WorkoutLevelRecommendation recommendation;
   final ProgressMetric metric;
   final ValueChanged<ProgressMetric> onMetricChanged;
+  final Future<void> Function(double weightKg) onRecordWeight;
 
   @override
   Widget build(BuildContext context) {
     final weeklyValues = _weeklyValues(workouts, metric, DateTime.now());
     final metricTotal = weeklyValues.fold<int>(0, (sum, value) => sum + value);
+    final weightDue = isWeightUpdateDue(weights);
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
       children: [
@@ -176,6 +233,13 @@ class _ProgressContent extends StatelessWidget {
         const Text(
           'สรุปผลรายสัปดาห์ในช่วง 8 สัปดาห์ล่าสุด',
           style: TextStyle(color: _progressMuted),
+        ),
+        const SizedBox(height: 18),
+        _WeightTrackingCard(
+          entries: weights,
+          isDue: weightDue,
+          profileWeightKg: profile.weightKg,
+          onRecord: onRecordWeight,
         ),
         const SizedBox(height: 18),
         Container(
@@ -219,6 +283,13 @@ class _ProgressContent extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                 ),
               ),
+              if (metric == ProgressMetric.calories) ...[
+                const SizedBox(height: 6),
+                const Text(
+                  'แคลอรีคำนวณด้วยสูตร MET รายการที่ไม่มีน้ำหนักจะไม่นำมารวมในยอด',
+                  style: TextStyle(color: _progressMuted, fontSize: 12),
+                ),
+              ],
               const SizedBox(height: 8),
               SizedBox(
                 height: 210,
@@ -259,7 +330,7 @@ class _ProgressContent extends StatelessWidget {
       values[weekOffset] += switch (selectedMetric) {
         ProgressMetric.workouts => 1,
         ProgressMetric.minutes => workout.durationMinutes,
-        ProgressMetric.calories => workout.caloriesBurned,
+        ProgressMetric.calories => workout.caloriesBurned ?? 0,
       };
     }
     return values;
@@ -269,6 +340,287 @@ class _ProgressContent extends StatelessWidget {
     final localDate = DateTime(date.year, date.month, date.day);
     return localDate.subtract(Duration(days: localDate.weekday - 1));
   }
+}
+
+class _WeightTrackingCard extends StatefulWidget {
+  const _WeightTrackingCard({
+    required this.entries,
+    required this.isDue,
+    required this.profileWeightKg,
+    required this.onRecord,
+  });
+
+  final List<WeightEntry> entries;
+  final bool isDue;
+  final double? profileWeightKg;
+  final Future<void> Function(double weightKg) onRecord;
+
+  @override
+  State<_WeightTrackingCard> createState() => _WeightTrackingCardState();
+}
+
+class _WeightTrackingCardState extends State<_WeightTrackingCard> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _weightController;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _weightController = TextEditingController(
+      text: widget.profileWeightKg?.toString() ?? '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _weightController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _saving = true);
+    try {
+      await widget.onRecord(double.parse(_weightController.text.trim()));
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('บันทึกน้ำหนักไม่สำเร็จ: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final latest = widget.entries.isEmpty ? null : widget.entries.last;
+    final difference = widget.entries.length < 2
+        ? null
+        : widget.entries.last.weightKg - widget.entries.first.weightKg;
+    return Container(
+      key: const ValueKey('weight-tracking-card'),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'ติดตามน้ำหนัก',
+            style: TextStyle(
+              color: _progressInk,
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            widget.isDue
+                ? 'ถึงเวลาอัปเดตน้ำหนักประจำสัปดาห์แล้ว'
+                : latest == null
+                ? 'บันทึกน้ำหนักเพื่อเริ่มดูแนวโน้ม'
+                : 'บันทึกล่าสุด ${_dateLabel(latest.recordedAt)}',
+            style: TextStyle(
+              color: widget.isDue ? _progressOrange : _progressMuted,
+              fontWeight: widget.isDue ? FontWeight.w700 : FontWeight.normal,
+            ),
+          ),
+          if (difference != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              'เปลี่ยนแปลง ${difference > 0 ? '+' : ''}${difference.toStringAsFixed(1)} กก. จากครั้งแรก',
+              style: const TextStyle(color: _progressMuted),
+            ),
+          ],
+          const SizedBox(height: 12),
+          if (widget.entries.length >= 2)
+            Column(
+              children: [
+                SizedBox(
+                  height: 150,
+                  child: CustomPaint(
+                    key: const ValueKey('weight-history-chart'),
+                    painter: _WeightLineChartPainter(
+                      weights: widget.entries
+                          .map((entry) => entry.weightKg)
+                          .toList(),
+                    ),
+                    child: const SizedBox.expand(),
+                  ),
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      _dateLabel(widget.entries.first.recordedAt),
+                      style: const TextStyle(
+                        color: _progressMuted,
+                        fontSize: 11,
+                      ),
+                    ),
+                    Text(
+                      _dateLabel(widget.entries.last.recordedAt),
+                      style: const TextStyle(
+                        color: _progressMuted,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            )
+          else
+            Container(
+              key: const ValueKey('weight-history-empty-chart'),
+              height: 96,
+              alignment: Alignment.center,
+              child: const Text(
+                'เพิ่มบันทึกรายสัปดาห์เพื่อสร้างกราฟ',
+                style: TextStyle(color: _progressMuted),
+              ),
+            ),
+          const SizedBox(height: 12),
+          Form(
+            key: _formKey,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    key: const ValueKey('weight-entry-input'),
+                    controller: _weightController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'น้ำหนักวันนี้',
+                      suffixText: 'กก.',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    validator: (value) {
+                      final weight = double.tryParse(value?.trim() ?? '');
+                      if (weight == null || !weight.isFinite) {
+                        return 'กรอกน้ำหนักเป็นตัวเลข';
+                      }
+                      if (weight < 1 || weight > 500) {
+                        return 'น้ำหนักต้องอยู่ระหว่าง 1–500 กก.';
+                      }
+                      return null;
+                    },
+                  ),
+                ),
+                const SizedBox(width: 10),
+                FilledButton(
+                  key: const ValueKey('record-weight-button'),
+                  onPressed: _saving ? null : _submit,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _progressInk,
+                    minimumSize: const Size(76, 48),
+                  ),
+                  child: _saving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('บันทึก'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'บันทึกได้ทุกเมื่อ ระบบจะแจ้งเตือนในแอปเมื่อครบ 7 วัน',
+            style: TextStyle(color: _progressMuted, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _dateLabel(DateTime value) {
+    final date = value.toLocal();
+    return '${date.day}/${date.month}/${date.year}';
+  }
+}
+
+class _WeightLineChartPainter extends CustomPainter {
+  const _WeightLineChartPainter({required this.weights});
+
+  final List<double> weights;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (weights.length < 2 || size.isEmpty) return;
+    const left = 28.0;
+    const right = 12.0;
+    const top = 14.0;
+    const bottom = 14.0;
+    final chartWidth = size.width - left - right;
+    final chartHeight = size.height - top - bottom;
+    final minimum = weights.reduce(math.min);
+    final maximum = weights.reduce(math.max);
+    final range = math.max(maximum - minimum, 1.0);
+    final gridPaint = Paint()
+      ..color = const Color(0xFFE8EAE4)
+      ..strokeWidth = 1;
+    for (var row = 0; row < 3; row++) {
+      final y = top + chartHeight * row / 2;
+      canvas.drawLine(
+        Offset(left, y),
+        Offset(size.width - right, y),
+        gridPaint,
+      );
+    }
+    final points = List<Offset>.generate(weights.length, (index) {
+      final x = left + chartWidth * index / (weights.length - 1);
+      final y = top + chartHeight * (maximum - weights[index]) / range;
+      return Offset(x, y);
+    });
+    final line = Path()..moveTo(points.first.dx, points.first.dy);
+    for (final point in points.skip(1)) {
+      line.lineTo(point.dx, point.dy);
+    }
+    canvas.drawPath(
+      line,
+      Paint()
+        ..color = _progressOrange
+        ..strokeWidth = 3
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..style = PaintingStyle.stroke,
+    );
+    final pointPaint = Paint()..color = _progressOrange;
+    final labelStyle = const TextStyle(
+      color: _progressInk,
+      fontSize: 10,
+      fontWeight: FontWeight.w700,
+    );
+    for (var index = 0; index < points.length; index++) {
+      canvas.drawCircle(points[index], 4, pointPaint);
+      final label = TextPainter(
+        text: TextSpan(
+          text: weights[index].toStringAsFixed(1),
+          style: labelStyle,
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      final labelY = points[index].dy < top + 24
+          ? points[index].dy + 6
+          : points[index].dy - label.height - 6;
+      label.paint(canvas, Offset(points[index].dx - label.width / 2, labelY));
+    }
+  }
+
+  @override
+  bool shouldRepaint(_WeightLineChartPainter oldDelegate) =>
+      oldDelegate.weights != weights;
 }
 
 class _WeekLabels extends StatelessWidget {

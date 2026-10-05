@@ -11,7 +11,8 @@ from oidc_provider.models import Client, Code, RSAKey, ResponseType, Token
 from oidc_provider.lib.utils.common import get_issuer
 from rest_framework.test import APITestCase
 
-from .models import Challenge, UserProfile, Workout
+from .calorie_estimation import estimate_calories_burned
+from .models import Challenge, UserProfile, WeightEntry, Workout
 
 
 class RegistrationTests(TestCase):
@@ -66,6 +67,10 @@ class RegistrationTests(TestCase):
         self.assertEqual(profile.age, 28)
         self.assertEqual(str(profile.weight_kg), "62.5")
         self.assertEqual(str(profile.height_cm), "168.0")
+        self.assertEqual(
+            list(WeightEntry.objects.filter(user=user).values_list("weight_kg", flat=True)),
+            [profile.weight_kg],
+        )
 
     def test_registration_rejects_out_of_range_profile_data(self):
         response = self.client.post(
@@ -360,6 +365,9 @@ class WorkoutApiTests(APITestCase):
         self.assertEqual(self.client.get("/api/profile").status_code, 200)
 
     def test_plan_has_28_days_and_a_completed_workout_updates_tracker(self):
+        profile, _ = UserProfile.objects.get_or_create(user=self.user)
+        profile.weight_kg = 70
+        profile.save(update_fields=["weight_kg"])
         response = self.client.get("/api/plan?focus=legs&difficulty=beginner")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data["days"]), 28)
@@ -386,7 +394,8 @@ class WorkoutApiTests(APITestCase):
             format="json",
         )
         self.assertEqual(finish.status_code, 201)
-        self.assertEqual(finish.data["caloriesBurned"], 70)
+        expected_calories = round(3.5 * 3.5 * 70 / 200 * 14)
+        self.assertEqual(finish.data["caloriesBurned"], expected_calories)
         self.assertEqual(finish.data["exerciseCount"], 4)
 
         repeated = self.client.post(
@@ -405,12 +414,15 @@ class WorkoutApiTests(APITestCase):
             {
                 "completedDays": 1,
                 "totalExercises": 4,
-                "totalCalories": 70,
+                "totalCalories": expected_calories,
                 "totalMinutes": 14,
             },
         )
 
     def test_workout_detail_supports_owner_scoped_crud(self):
+        profile, _ = UserProfile.objects.get_or_create(user=self.user)
+        profile.weight_kg = 70
+        profile.save(update_fields=["weight_kg"])
         workout = self.make_workout(self.user)
         detail_url = f"/api/workouts/{workout.pk}"
 
@@ -425,7 +437,10 @@ class WorkoutApiTests(APITestCase):
         )
         self.assertEqual(patched.status_code, 200)
         self.assertEqual(patched.data["title"], "Updated workout")
-        self.assertEqual(patched.data["caloriesBurned"], 60)
+        self.assertEqual(
+            patched.data["caloriesBurned"],
+            round(3.5 * 3.5 * 70 / 200 * 12),
+        )
 
         replaced = self.client.put(
             detail_url,
@@ -434,6 +449,10 @@ class WorkoutApiTests(APITestCase):
         )
         self.assertEqual(replaced.status_code, 200)
         self.assertEqual(replaced.data["durationMinutes"], 15)
+        self.assertEqual(
+            replaced.data["caloriesBurned"],
+            round(3.5 * 3.5 * 70 / 200 * 15),
+        )
         self.assertEqual(self.client.delete(detail_url).status_code, 204)
         self.assertEqual(self.client.get(detail_url).status_code, 404)
 
@@ -521,6 +540,179 @@ class WorkoutApiTests(APITestCase):
             format="json",
         )
         self.assertEqual(response.status_code, 400)
+
+    def test_weight_history_records_readings_and_updates_profile_weight(self):
+        initial = self.client.get("/api/weights")
+        self.assertEqual(initial.status_code, 200)
+        self.assertEqual(initial.data, [])
+
+        first = self.client.post(
+            "/api/weights",
+            {"weightKg": "70.5"},
+            format="json",
+        )
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(str(first.data["weightKg"]), "70.5")
+
+        second = self.client.post(
+            "/api/weights",
+            {"weightKg": "69.8"},
+            format="json",
+        )
+        self.assertEqual(second.status_code, 201)
+        self.assertEqual(str(second.data["weightKg"]), "69.8")
+
+        history = self.client.get("/api/weights")
+        self.assertEqual(history.status_code, 200)
+        self.assertEqual(len(history.data), 2)
+        self.assertEqual(
+            [item["weightKg"] for item in history.data],
+            ["70.5", "69.8"],
+        )
+        profile = self.client.get("/api/profile")
+        self.assertEqual(str(profile.data["weightKg"]), "69.8")
+
+    def test_weight_history_rejects_invalid_weight_and_is_private(self):
+        invalid = self.client.post(
+            "/api/weights",
+            {"weightKg": "0"},
+            format="json",
+        )
+        self.assertEqual(invalid.status_code, 400)
+        self.assertEqual(WeightEntry.objects.count(), 0)
+
+        self.client.credentials()
+        self.assertEqual(self.client.get("/api/weights").status_code, 401)
+        self.assertEqual(
+            self.client.post(
+                "/api/weights",
+                {"weightKg": "60"},
+                format="json",
+            ).status_code,
+            401,
+        )
+
+    def test_profile_weight_changes_are_added_to_weight_history(self):
+        profile_url = "/api/profile"
+        first = self.client.patch(
+            profile_url,
+            {"weightKg": "71.2"},
+            format="json",
+        )
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(WeightEntry.objects.filter(user=self.user).count(), 1)
+
+        unchanged = self.client.patch(
+            profile_url,
+            {"weightKg": "71.2"},
+            format="json",
+        )
+        self.assertEqual(unchanged.status_code, 200)
+        self.assertEqual(WeightEntry.objects.filter(user=self.user).count(), 1)
+
+        changed = self.client.patch(
+            profile_url,
+            {"weightKg": "70.4"},
+            format="json",
+        )
+        self.assertEqual(changed.status_code, 200)
+        self.assertEqual(WeightEntry.objects.filter(user=self.user).count(), 2)
+
+    def test_calorie_estimate_uses_met_weight_and_training_difficulty(self):
+        profile, _ = UserProfile.objects.get_or_create(user=self.user)
+        profile.weight_kg = 70
+        profile.save(update_fields=["weight_kg"])
+        challenge = Challenge.objects.create(
+            user=self.user,
+            focus="legs",
+            difficulty="beginner",
+            start_date=timezone.localdate() - timedelta(days=1),
+        )
+
+        response = self.client.post(
+            "/api/workouts",
+            {
+                "focus": "legs",
+                "difficulty": "beginner",
+                "dayNumber": 1,
+                "durationMinutes": 14,
+            },
+            format="json",
+        )
+
+        expected = round(3.5 * 3.5 * 70 / 200 * 14)
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["caloriesBurned"], expected)
+        self.assertEqual(
+            self.client.get("/api/stats").data["totalCalories"],
+            expected,
+        )
+
+    def test_calories_are_unavailable_until_weight_is_in_profile(self):
+        challenge = Challenge.objects.create(
+            user=self.user,
+            focus="legs",
+            difficulty="beginner",
+            start_date=timezone.localdate() - timedelta(days=1),
+        )
+
+        response = self.client.post(
+            "/api/workouts",
+            {
+                "focus": "legs",
+                "difficulty": "beginner",
+                "dayNumber": 1,
+                "durationMinutes": 14,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertIsNone(response.data["caloriesBurned"])
+        self.assertIsNone(self.client.get("/api/stats").data["totalCalories"])
+
+    def test_stats_sum_only_records_with_calculated_calories(self):
+        challenge = Challenge.objects.create(
+            user=self.user,
+            focus="legs",
+            difficulty="beginner",
+            start_date=timezone.localdate() - timedelta(days=1),
+        )
+        first_response = self.client.post(
+            "/api/workouts",
+            {
+                "focus": "legs",
+                "difficulty": "beginner",
+                "dayNumber": 1,
+                "durationMinutes": 10,
+            },
+            format="json",
+        )
+        self.assertIsNone(first_response.data["caloriesBurned"])
+
+        profile, _ = UserProfile.objects.get_or_create(user=self.user)
+        profile.weight_kg = 70
+        profile.save(update_fields=["weight_kg"])
+        second_response = self.client.post(
+            "/api/workouts",
+            {
+                "focus": "legs",
+                "difficulty": "beginner",
+                "dayNumber": 2,
+                "durationMinutes": 10,
+            },
+            format="json",
+        )
+
+        expected = round(3.5 * 3.5 * 70 / 200 * 10)
+        self.assertEqual(second_response.data["caloriesBurned"], expected)
+        self.assertEqual(
+            self.client.get("/api/stats").data["totalCalories"],
+            expected,
+        )
+
+    def test_met_helper_returns_none_without_weight(self):
+        self.assertIsNone(estimate_calories_burned(None, 20, "beginner"))
 
     def test_three_consecutive_completed_workouts_create_a_recovery_day(self):
         challenge = Challenge.objects.create(

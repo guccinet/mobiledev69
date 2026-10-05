@@ -2,7 +2,7 @@ from django import forms
 from django.contrib.auth import get_user_model, password_validation
 from django.core.exceptions import ValidationError
 
-from .models import UserProfile
+from .models import UserProfile, WeightEntry
 
 
 class RegistrationForm(forms.Form):
@@ -95,11 +95,13 @@ class RegistrationForm(forms.Form):
             email=email,
             password=self.cleaned_data["password1"],
         )
-        UserProfile.objects.create(
+        profile = UserProfile.objects.create(
             user=user,
             gender=self.cleaned_data["gender"] or None,
             age=self.cleaned_data["age"],
             weight_kg=self.cleaned_data["weight_kg"],
             height_cm=self.cleaned_data["height_cm"],
         )
+        if profile.weight_kg is not None:
+            WeightEntry.objects.create(user=user, weight_kg=profile.weight_kg)
         return user
