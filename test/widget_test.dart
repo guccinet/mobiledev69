@@ -383,13 +383,19 @@ void main() {
 
     expect(find.text('พื้นที่เล็ก ๆ\nเพื่อร่างกายที่ดีขึ้น'), findsOneWidget);
     expect(find.text('เลือกพื้นที่ฝึก'), findsOneWidget);
+    expect(find.byKey(const ValueKey('stat-total-exercises')), findsOneWidget);
+    expect(find.text('ท่าที่ฝึก'), findsOneWidget);
+    expect(find.byKey(const ValueKey('stat-total-calories')), findsOneWidget);
+    expect(find.text('แคลอรีรวม'), findsOneWidget);
+    expect(find.byKey(const ValueKey('stat-total-minutes')), findsOneWidget);
+    expect(find.text('นาทีฝึก'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('ชาเลนจ์ 4 สัปดาห์'),
       300,
       scrollable: find.byType(Scrollable).first,
     );
     expect(find.text('ชาเลนจ์ 4 สัปดาห์'), findsOneWidget);
-    expect(find.text('ท่าที่ฝึก'), findsNothing);
+    expect(find.byKey(const ValueKey('stat-total-exercises')), findsOneWidget);
     expect(
       find.byKey(const ValueKey('profile-body-silhouette')),
       findsOneWidget,

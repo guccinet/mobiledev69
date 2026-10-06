@@ -32,10 +32,15 @@ migrate_working_dir/
 .pub/
 **/build/
 /coverage/
-/backend/db.sqlite3
+*.sqlite3
+**/*.sqlite3
+/backend/frontend_build/
+/backend/staticfiles/
 **/__pycache__/
-/venv/
-/.venv/
+venv/
+.venv/
+**/venv/
+**/.venv/
 
 # Local Android SDK configuration and Gradle caches
 /android/local.properties

@@ -239,6 +239,13 @@ class WorkoutApi implements WorkoutService {
   static Uri get _defaultBaseUri {
     const configuredUrl = String.fromEnvironment('API_BASE_URL');
     if (configuredUrl.isNotEmpty) return Uri.parse(configuredUrl);
+    if (kIsWeb) {
+      final host = Uri.base.host;
+      if (host == 'localhost' || host == '127.0.0.1') {
+        return Uri.parse('http://localhost:3000/api');
+      }
+      return Uri.base.resolve('/api');
+    }
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
       return Uri.parse('http://10.0.2.2:3000/api');
     }

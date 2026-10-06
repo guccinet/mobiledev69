@@ -1,6 +1,19 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:oidc/oidc.dart';
 import 'package:oidc_default_store/oidc_default_store.dart';
+
+Uri _configuredUri({
+  required String configuredValue,
+  required String localValue,
+  required String sameOriginPath,
+}) {
+  if (configuredValue.isNotEmpty) return Uri.parse(configuredValue);
+  if (kIsWeb && Uri.base.host != 'localhost' && Uri.base.host != '127.0.0.1') {
+    return Uri.base.resolve(sameOriginPath);
+  }
+  return Uri.parse(localValue);
+}
 
 class OidcAuthService {
   OidcAuthService({
@@ -10,28 +23,27 @@ class OidcAuthService {
     String? clientId,
   }) : _issuer =
            issuer ??
-           Uri.parse(
-             const String.fromEnvironment(
-               'OIDC_ISSUER_URL',
-               defaultValue: 'http://localhost:3000/oidc',
-             ),
+           _configuredUri(
+             configuredValue: const String.fromEnvironment('OIDC_ISSUER_URL'),
+             localValue: 'http://localhost:3000/oidc',
+             sameOriginPath: '/oidc',
            ),
        _discoveryDocumentUri =
            discoveryDocumentUri ??
-           Uri.parse(
-             const String.fromEnvironment(
+           _configuredUri(
+             configuredValue: const String.fromEnvironment(
                'OIDC_DISCOVERY_URL',
-               defaultValue:
-                   'http://localhost:3000/oidc/.well-known/openid-configuration',
              ),
+             localValue:
+                 'http://localhost:3000/oidc/.well-known/openid-configuration',
+             sameOriginPath: '/oidc/.well-known/openid-configuration',
            ),
        _redirectUri =
            redirectUri ??
-           Uri.parse(
-             const String.fromEnvironment(
-               'OIDC_REDIRECT_URI',
-               defaultValue: 'http://localhost:50000/redirect.html',
-             ),
+           _configuredUri(
+             configuredValue: const String.fromEnvironment('OIDC_REDIRECT_URI'),
+             localValue: 'http://localhost:50000/redirect.html',
+             sameOriginPath: '/static/app/redirect.html',
            ),
        _clientId =
            clientId ??

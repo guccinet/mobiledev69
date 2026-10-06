@@ -18,7 +18,7 @@ Move Daily เป็นแอป Flutter สำหรับผู้ที่ต
 - ดูท่าฝึกทีละท่า พร้อมภาพสาธิต คำแนะนำ และตัวนับเวลาสำหรับท่าค้าง
 - บันทึกประวัติ ดูรายละเอียด แก้ไขเวลา และลบรายการฝึกของบัญชีตนเอง
 - จัดการข้อมูลโปรไฟล์ ได้แก่ เพศ อายุ น้ำหนัก และส่วนสูง
-- แสดงสถิติวันฝึก เวลา และแคลอรีโดยประมาณ
+- Dashboard แสดงจำนวนท่าที่ฝึก แคลอรีรวมโดยประมาณ และนาทีฝึกสะสม
 - บันทึกประวัติน้ำหนัก แสดงกราฟแนวโน้ม และเตือนในแอปเมื่อครบกำหนดอัปเดตรายสัปดาห์
 - แสดงข้อผิดพลาดจาก API เมื่อเชื่อมต่อไม่ได้หรือคำขอไม่สำเร็จ
 
@@ -51,7 +51,7 @@ Move Daily เป็นแอป Flutter สำหรับผู้ที่ต
 - [Git](https://git-scm.com/downloads)
 - [Flutter SDK](https://docs.flutter.dev/get-started/install) พร้อม Chrome สำหรับรัน Flutter Web
 - [uv](https://docs.astral.sh/uv/getting-started/installation/)
-- [Python 3.9 ขึ้นไป](https://www.python.org/downloads/) (หรือให้ `uv` จัดการ Python ให้)
+- [Python 3.11 ขึ้นไป](https://www.python.org/downloads/) (หรือให้ `uv` จัดการ Python ให้)
 
 ตรวจสอบการติดตั้ง:
 
@@ -176,7 +176,19 @@ Get-NetTCPConnection -LocalPort 50000 -State Listen |
 
 **สถานะ: รออัปโหลดวิดีโอสาธิตแบบ Unlisted ไปยัง YouTube**
 
-ยังไม่มีลิงก์วิดีโอจริง จึงยังไม่ใส่ URL จำลองไว้ที่นี่ หลังอัปโหลดแล้ว ให้นำลิงก์ YouTube แบบ Unlisted มาแทนข้อความนี้
+> ใส่ลิงก์ YouTube (Unlisted) ที่นี่ เช่น: `https://youtu.be/...`
+
+## 9. การเตรียมระบบสำหรับใช้งานจริงบนอินเทอร์เน็ต (Deploy บน Render)
+
+โปรเจกต์มี `render.yaml` และ `Dockerfile` สำหรับ deploy Flutter Web กับ Django API ใน Web Service เดียว และใช้ Render PostgreSQL เป็นฐานข้อมูลถาวร วิธีนี้ทำให้แอป, API และ OIDC ใช้ origin เดียวกัน
+
+1. Push โค้ดขึ้น GitHub แล้วสร้าง **Blueprint** ใหม่จาก repository นี้บน Render โดยเลือก branch `project` ที่ต้องการ deploy
+2. ตรวจสอบแผนและค่าใช้จ่ายก่อนยืนยัน: Web Service ตั้งเป็น Free ซึ่งอาจ sleep เมื่อไม่มีการใช้งาน ส่วน PostgreSQL ตั้งเป็น `basic-256mb` ซึ่งเป็นบริการแบบมีค่าใช้จ่าย อย่ากดยืนยันหากยังไม่ยอมรับค่าใช้จ่ายของฐานข้อมูล
+3. Render จะ build Flutter Web และ Django, รัน migration และตั้งค่า public OIDC client ให้อัตโนมัติ ตรวจสถานะ health ที่ `/api/health`
+4. เปิด URL ของ Web Service แล้วสร้างบัญชีใหม่ที่ `/accounts/register/`; ระบบไม่ได้สร้างบัญชี demo หรือฝังรหัสผ่านสำหรับ production
+5. หากใช้ custom domain ให้ตั้ง `PUBLIC_ORIGIN` เป็น `https://<โดเมน>` และเพิ่มโดเมนเดียวกันใน `DJANGO_ALLOWED_HOSTS` จาก Environment ของ Web Service แล้ว deploy ใหม่ เพื่อให้ OIDC issuer และ redirect URI ตรงกับโดเมนจริง
+
+ยังไม่ได้สร้างบริการหรือ deploy จริงในบัญชี Render; Blueprint จะเริ่มสร้างทรัพยากรและฐานข้อมูลเมื่อคุณเชื่อม repository และยืนยันใน Render เท่านั้น
 
 ## การทดสอบ
 

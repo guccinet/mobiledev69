@@ -457,10 +457,7 @@ class _WeightReminderCard extends StatelessWidget {
             style: TextStyle(color: _ink, fontWeight: FontWeight.w700),
           ),
         ),
-        TextButton(
-          onPressed: onUpdate,
-          child: const Text('บันทึก'),
-        ),
+        TextButton(onPressed: onUpdate, child: const Text('บันทึก')),
       ],
     ),
   );
@@ -483,15 +480,26 @@ class _StatsCard extends StatelessWidget {
       children: [
         Row(
           children: [
-            _BodySilhouetteStat(profile: profile),
             _StatItem(
-              value: stats.totalCalories?.toString() ?? '—',
-              label: 'แคลอรี',
+              key: const ValueKey('stat-total-exercises'),
+              value: '${stats.totalExercises}',
+              label: 'ท่าที่ฝึก',
             ),
-            _StatItem(value: '${stats.totalMinutes}', label: 'นาที'),
+            _StatItem(
+              key: const ValueKey('stat-total-calories'),
+              value: stats.totalCalories?.toString() ?? '—',
+              label: 'แคลอรีรวม',
+            ),
+            _StatItem(
+              key: const ValueKey('stat-total-minutes'),
+              value: '${stats.totalMinutes}',
+              label: 'นาทีฝึก',
+            ),
           ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
+        _BodySilhouetteStat(profile: profile),
+        const SizedBox(height: 8),
         const Text(
           'แคลอรีประมาณด้วย MET · คิดเฉพาะรายการที่มีน้ำหนัก',
           style: TextStyle(color: Color(0xFFD5DCD7), fontSize: 11),
@@ -507,34 +515,33 @@ class _BodySilhouetteStat extends StatelessWidget {
   final UserProfile profile;
 
   @override
-  Widget build(BuildContext context) => Expanded(
-    child: Semantics(
-      label: 'รูปร่างโดยประมาณจากส่วนสูงและน้ำหนักในโปรไฟล์',
-      child: Tooltip(
-        message: profile.heightCm == null || profile.weightKg == null
-            ? 'เพิ่มน้ำหนักและส่วนสูงในโปรไฟล์เพื่อปรับภาพสัญลักษณ์'
-            : 'ภาพสัญลักษณ์โดยประมาณจากข้อมูลโปรไฟล์ ไม่ใช่ภาพร่างกายจริง',
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              width: 56,
-              height: 62,
-              child: CustomPaint(
-                key: const ValueKey('profile-body-silhouette'),
-                painter: _BodySilhouettePainter(
-                  heightCm: profile.heightCm,
-                  weightKg: profile.weightKg,
-                ),
+  Widget build(BuildContext context) => Semantics(
+    label: 'รูปร่างโดยประมาณจากส่วนสูงและน้ำหนักในโปรไฟล์',
+    child: Tooltip(
+      message: profile.heightCm == null || profile.weightKg == null
+          ? 'เพิ่มน้ำหนักและส่วนสูงในโปรไฟล์เพื่อปรับภาพสัญลักษณ์'
+          : 'ภาพสัญลักษณ์โดยประมาณจากข้อมูลโปรไฟล์ ไม่ใช่ภาพร่างกายจริง',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 42,
+            height: 46,
+            child: CustomPaint(
+              key: const ValueKey('profile-body-silhouette'),
+              painter: _BodySilhouettePainter(
+                heightCm: profile.heightCm,
+                weightKg: profile.weightKg,
               ),
             ),
-            const SizedBox(height: 4),
-            const Text(
-              'รูปร่างโดยประมาณ',
-              style: TextStyle(color: Color(0xFFD5DCD7), fontSize: 12),
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 2),
+          const Text(
+            'รูปร่างโดยประมาณ',
+            style: TextStyle(color: Color(0xFFD5DCD7), fontSize: 10),
+          ),
+        ],
       ),
     ),
   );
@@ -626,7 +633,7 @@ class _BodySilhouettePainter extends CustomPainter {
 }
 
 class _StatItem extends StatelessWidget {
-  const _StatItem({required this.value, required this.label});
+  const _StatItem({super.key, required this.value, required this.label});
 
   final String value;
   final String label;

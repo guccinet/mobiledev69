@@ -1,0 +1,13 @@
+.git
+.idea
+.dart_tool
+.flutter-plugins-dependencies
+.pub-cache
+.pub
+**/.dart_tool
+**/build
+**/__pycache__
+**/.venv
+venv
+backend/db.sqlite3
+*.iml

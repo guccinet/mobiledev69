@@ -1,10 +1,11 @@
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
 
-from workouts.views import register
+from workouts.views import frontend_app, register
 
 
 urlpatterns = [
+    path("", frontend_app, name="frontend"),
     path(
         "accounts/login/",
         auth_views.LoginView.as_view(template_name="registration/login.html"),

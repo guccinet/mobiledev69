@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from oidc_provider.models import Client, Code, RSAKey, ResponseType, Token
 from oidc_provider.lib.utils.common import get_issuer
@@ -305,6 +305,23 @@ class WorkoutApiTests(APITestCase):
         self.assertEqual(list(demo_client.response_type_values()), ["code"])
         self.assertEqual(demo_client.redirect_uris, ["http://localhost:50000/redirect.html"])
         self.assertEqual(Client.objects.filter(client_id="movedaily-demo-test").count(), 1)
+        self.assertEqual(RSAKey.objects.count(), 1)
+
+    @override_settings(
+        OIDC_FLUTTER_CLIENT_ID="movedaily-render-test",
+        OIDC_REDIRECT_URI="https://movedaily.example/static/app/redirect.html",
+    )
+    def test_setup_oidc_client_creates_public_client_without_demo_user(self):
+        call_command("setup_oidc_client", verbosity=0)
+
+        client = Client.objects.get(client_id="movedaily-render-test")
+        self.assertIsNone(client.owner)
+        self.assertEqual(client.client_type, "public")
+        self.assertEqual(list(client.response_type_values()), ["code"])
+        self.assertEqual(
+            client.redirect_uris,
+            ["https://movedaily.example/static/app/redirect.html"],
+        )
         self.assertEqual(RSAKey.objects.count(), 1)
 
     def test_provider_token_endpoint_uses_code_verifier_for_pkce(self):

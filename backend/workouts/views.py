@@ -1,8 +1,10 @@
 from datetime import timedelta
+from django.conf import settings
 from django.db.models import Sum
 from django.contrib import messages
 from django.contrib.auth import login
 from django.db import IntegrityError, transaction
+from django.http import FileResponse, HttpResponseNotFound
 from django.shortcuts import get_object_or_404
 from django.shortcuts import redirect, render
 from django.urls import reverse
@@ -85,6 +87,13 @@ def record_weight(user, weight_kg):
     profile.weight_kg = weight_kg
     profile.save(update_fields=["weight_kg"])
     return WeightEntry.objects.create(user=user, weight_kg=weight_kg)
+
+
+def frontend_app(_request):
+    index_file = settings.FRONTEND_BUILD_DIR / "index.html"
+    if not index_file.is_file():
+        return HttpResponseNotFound("Flutter web build is unavailable.")
+    return FileResponse(index_file.open("rb"), content_type="text/html")
 
 
 class HealthView(APIView):
