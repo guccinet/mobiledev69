@@ -174,9 +174,9 @@ Get-NetTCPConnection -LocalPort 50000 -State Listen |
 
 ## 8. Demo Video
 
-**สถานะ: รออัปโหลดวิดีโอสาธิตแบบ Unlisted ไปยัง YouTube**
+วิดีโอสาธิตการทำงานของแอปพลิเคชัน (Unlisted บน YouTube):
 
-> ใส่ลิงก์ YouTube (Unlisted) ที่นี่ เช่น: `https://youtu.be/...`
+- **YouTube Video:** [https://youtu.be/PyRGdJWPeEE](https://youtu.be/PyRGdJWPeEE)
 
 ## 9. การเตรียมระบบสำหรับใช้งานจริงบนอินเทอร์เน็ต (Deploy บน Render)
 
